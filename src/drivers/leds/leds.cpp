@@ -5,11 +5,13 @@
 #include "WS2812.pio.h"
 #include "board.h"
 
+#define BOARD_LED_FREQ     800000   // WS2812 data-line frequency in Hz
+
 // Minimum idle time (µs) required between WS2812 frames for the reset pulse.
 // 280 µs is the spec minimum; 300 µs adds a small margin.
 static constexpr uint32_t WS2812_RESET_US = 300;
 
-// --- Private methods --------------------------------------------------------
+// --- Private methods 
 
 // Clocks the full staging buffer out over PIO.
 // WS2812 LEDs latch all values simultaneously when the data line goes idle,
@@ -66,7 +68,7 @@ void LedDriver::hsv_to_rgb(float h, float s, float v,
     }
 }
 
-// --- Constructor ------------------------------------------------------------
+// --- Constructor 
 
 // The member-initialiser list runs before the body:
 //   colours_(num_leds) — value-initialises each Colour to {0,0,0} (all LEDs off)
@@ -78,7 +80,7 @@ LedDriver::LedDriver(int num_leds)
     ws2812_program_init(pio0, 0, offset, BOARD_LED_PIN, BOARD_LED_FREQ, BOARD_LED_IS_RGBW);
 }
 
-// --- LED count --------------------------------------------------------------
+// --- LED count 
 
 void LedDriver::set_count(int new_count)
 {
@@ -93,7 +95,7 @@ int LedDriver::get_count() const
     return (int)colours_.size();
 }
 
-// --- RGB staging ------------------------------------------------------------
+// --- RGB staging 
 
 void LedDriver::set_all(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -119,7 +121,7 @@ void LedDriver::set_range(int start, int count, uint8_t r, uint8_t g, uint8_t b)
     dirty_ = true;
 }
 
-// --- HSV staging ------------------------------------------------------------
+// --- HSV staging 
 
 void LedDriver::set_one_hsv(int index, float hue, float sat, float val)
 {
@@ -143,7 +145,7 @@ void LedDriver::set_range_hsv(int start, int count, float hue, float sat, float 
     set_range(start, count, r, g, b);
 }
 
-// --- Query ------------------------------------------------------------------
+// --- Query 
 
 LedDriver::Colour LedDriver::get_one(int index) const
 {
@@ -151,21 +153,27 @@ LedDriver::Colour LedDriver::get_one(int index) const
     return colours_[index];
 }
 
-bool LedDriver::is_dirty() const
+// Returns true if any staged change has not yet been sent to the hardware.
+// The flag is set automatically by every set_*() call and cleared by show().
+//
+// Typical use: check has_pending_changes() before calling show() to avoid
+// sending an unnecessary frame when nothing has changed — useful in tight
+// loops where the LED state may or may not have been updated on a given iteration.
+bool LedDriver::has_pending_changes() const
 {
     return dirty_;
 }
 
 void LedDriver::print_status() const
 {
-    printf("Dirty: %s\n", dirty_ ? "yes" : "no");
+    printf("Pending changes: %s\n", dirty_ ? "yes" : "no");
     for (int i = 0; i < (int)colours_.size(); i++) {
         printf("  [%2d]  R=%3u  G=%3u  B=%3u\n",
                i, colours_[i].r, colours_[i].g, colours_[i].b);
     }
 }
 
-// --- Control ----------------------------------------------------------------
+// --- Control 
 
 void LedDriver::off()
 {

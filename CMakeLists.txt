@@ -50,6 +50,8 @@ if(CrossCompiling)
     target_sources(labs
         PUBLIC
         src/main.cpp
+        src/tasks/led_task.cpp
+        src/tasks/accelerometer_task.cpp
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
     )
@@ -98,6 +100,8 @@ else()
         src/main.cpp
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
+        src/tasks/led_task.cpp
+        src/tasks/accelerometer_task.cpp
         tests/mocks/pico/stdlib.cpp
         tests/mocks/pico/time.cpp
         tests/mocks/hardware/gpio.cpp
