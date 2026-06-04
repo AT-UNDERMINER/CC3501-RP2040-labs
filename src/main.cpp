@@ -1,37 +1,47 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "hardware/gpio.h"
-#include "hardware/pio.h"
-
-#include "WS2812.pio.h" // This header file gets produced during compilation from the WS2812.pio file
+#include "drivers/leds/leds.h"
 #include "drivers/logging/logging.h"
-
-#define LED_PIN 14
+#include "board.h"
 
 int main()
 {
     stdio_init_all();
 
-    // Initialise PIO0 to control the LED chain
-    uint pio_program_offset = pio_add_program(pio0, &ws2812_program);
-    ws2812_program_init(pio0, 0, pio_program_offset, LED_PIN, 800000, false);
-    uint32_t led_data [1];
+    LedDriver leds(BOARD_LED_COUNT);
+
+    // busy_wait is enabled by default — show() will hold for 300 µs after each
+    // frame so the WS2812 reset pulse is always satisfied between updates.
+    leds.set_busy_wait(false);
 
     for (;;) {
-        // Test the log system
-        log(LogLevel::INFORMATION, "Hello world");
-
-        // Turn on the first LED to be a certain colour
-        uint8_t red = 0;
-        uint8_t green = 0;
-        uint8_t blue = 255;
-        led_data[0] = (red << 24) | (green << 16) | (blue << 8);
-        pio_sm_put_blocking(pio0, 0, led_data[0]);
+        // Set individual LEDs to different colours, then commit all at once
+        leds.set_one(0, 255, 0,   0);   // red
+        leds.set_one(1, 0,   255, 0);   // green
+        leds.set_one(2, 0,   0,   255); // blue
+        leds.show();
+        leds.print_status();
         sleep_ms(500);
 
-        // Set the first LED off 
-        led_data[0] = 0;
-        pio_sm_put_blocking(pio0, 0, led_data[0]);
+        // Use HSV to sweep the hue across all LEDs
+        for (int led = 0; led < leds.get_count(); led++) {
+            float hue = (360.0f / leds.get_count()) * led;
+            leds.set_one_hsv(led, hue, 1.0f, 1.0f);
+        }
+        leds.show();
+        sleep_ms(500);
+
+        // Set a range to one colour, then query and log the result
+        leds.set_range(0, 6, 128, 255, 0);
+        leds.set_range(6, 6, 0,   255, 128);
+        leds.show();
+        sleep_ms(500);
+
+        leds.print_status();
+        log(LogLevel::INFORMATION, "Range update complete.");
+
+        leds.off();
+        leds.show();
         sleep_ms(500);
     }
 
