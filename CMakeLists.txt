@@ -51,12 +51,13 @@ if(CrossCompiling)
         PUBLIC
         src/main.cpp
         src/tasks/led_task.cpp
+        src/tasks/idle_task.cpp
         src/tasks/accelerometer_task.cpp
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
     )
     target_include_directories(labs
-        PUBLIC 
+        PUBLIC
         src/
     )
 
@@ -101,6 +102,7 @@ else()
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
         src/tasks/led_task.cpp
+        src/tasks/idle_task.cpp
         src/tasks/accelerometer_task.cpp
         tests/mocks/pico/stdlib.cpp
         tests/mocks/pico/time.cpp
