@@ -1,21 +1,19 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "tasks/led_task.h"
-#include "tasks/idle_task.h"
 #include "board.h"
 
-// int main()
-// {
-//     stdio_init_all();
+// Forward declarations of task run/exit functions.
+// To add a new task: declare its run/exit functions here and add them to
+// task_run[] / task_exit[] below in the same order — no other changes needed.
+void run_idle_task();
+void exit_idle_task();
+void run_led_task();
+void exit_led_task();
 
-//     for (;;) {
-//         run_idle_task();
-//         sleep_ms(30);
-//     }
-
-//     return 0;
-// }
+static void (*const task_run[])()  = { run_idle_task, run_led_task };
+static void (*const task_exit[])() = { exit_idle_task, exit_led_task };
+static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]);
 
 int main()
 {
@@ -27,8 +25,13 @@ int main()
 
     bool button_pressed = false;
     bool last_state     = false;
+    int  current_task   = 0;
 
     for (;;) {
+        // a. Run one frame/step of the current task
+        task_run[current_task]();
+
+        // b. Poll GPIO15 for a button press (rising edge)
         bool state = gpio_get(SW1_PIN);
 
         if (state && !last_state) {
@@ -50,6 +53,13 @@ int main()
             last_state = false; // pin is now LOW after the release wait
         } else {
             last_state = state;
+        }
+
+        // c. Switch to the next task on a button press
+        if (button_pressed) {
+            task_exit[current_task]();
+            current_task = (current_task + 1) % NUM_TASKS;
+            button_pressed = false;
         }
 
         sleep_ms(5); // polling interval — well above the RC filter's settling time
