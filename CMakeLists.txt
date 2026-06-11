@@ -105,6 +105,7 @@ if(CrossCompiling)
         hardware_watchdog
         hardware_clocks
         hardware_pwm
+        hardware_adc
         CMSISDSP
     )
 
