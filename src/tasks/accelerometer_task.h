@@ -1,3 +1,4 @@
 #pragma once
 
-void accelerometer_task();
+void run_accelerometer_task();
+void exit_accelerometer_task();
