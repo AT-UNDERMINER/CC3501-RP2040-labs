@@ -55,6 +55,7 @@ if(CrossCompiling)
         src/tasks/accelerometer_task.cpp
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
+        src/drivers/lis3dh/lis3dh.cpp
     )
     target_include_directories(labs
         PUBLIC
@@ -103,7 +104,6 @@ else()
         src/drivers/leds/leds.cpp
         src/tasks/led_task.cpp
         src/tasks/idle_task.cpp
-        src/tasks/accelerometer_task.cpp
         tests/mocks/pico/stdlib.cpp
         tests/mocks/pico/time.cpp
         tests/mocks/hardware/gpio.cpp
