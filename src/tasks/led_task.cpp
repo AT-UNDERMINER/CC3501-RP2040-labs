@@ -54,6 +54,20 @@ void run_led_task()
                 break;
 
             case 3:
+                // Light a non-contiguous set of LEDs (the even ones) in one call
+                leds.off();
+                leds.set_many({0, 2, 4, 6, 8, 10}, 255, 0, 255); // magenta
+                leds.show();
+                break;
+
+            case 4:
+                // Same idea via HSV on the odd LEDs
+                leds.off();
+                leds.set_many_hsv({1, 3, 5, 7, 9, 11}, 180.0f, 1.0f, 1.0f); // cyan
+                leds.show();
+                break;
+
+            case 5:
                 leds.print_status();
                 log(LogLevel::INFORMATION, "Range update complete.");
                 leds.off();
@@ -65,7 +79,7 @@ void run_led_task()
     frame_counter++;
     if (frame_counter >= FRAMES_PER_STEP) {
         frame_counter = 0;
-        step = (step + 1) % 4;
+        step = (step + 1) % 6;
     }
 }
 
