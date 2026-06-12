@@ -21,8 +21,8 @@ void LedDriver::write_leds() const
     for (const Colour &c : colours_) {
         // Pack into the top 24 bits: R[31:24] G[23:16] B[15:8]
         // Explicit uint32_t cast prevents undefined behaviour for values >= 128
-        uint32_t word = ((uint32_t)c.r << 24)
-                      | ((uint32_t)c.g << 16)
+        uint32_t word = ((uint32_t)c.g << 24)
+                      | ((uint32_t)c.r << 16)
                       | ((uint32_t)c.b <<  8);
         pio_sm_put_blocking(pio0, 0, word);
     }
