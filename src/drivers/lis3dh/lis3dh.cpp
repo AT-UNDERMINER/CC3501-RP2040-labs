@@ -50,8 +50,9 @@ bool lis3dh_init(i2c_inst_t *i2c)
         return false;
     }
 
-    // CTRL_REG1 = 0x57: ODR=100 Hz, normal mode (LPen=0), X/Y/Z enabled.
-    write_reg(i2c, REG_CTRL_REG1, 0x57);
+    // CTRL_REG1: selected ODR | 0x07 (LPen=0 normal mode, Z/Y/X enabled).
+    uint8_t ctrl_reg1 = LIS3DH_ODR_SELECT | 0x07;
+    write_reg(i2c, REG_CTRL_REG1, ctrl_reg1);
     // CTRL_REG4 = 0x88: BDU=1, HR=1 (12-bit), FS=00 (+-2g).
     write_reg(i2c, REG_CTRL_REG4, 0x88);
 
