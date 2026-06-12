@@ -121,6 +121,22 @@ void LedDriver::set_range(int start, int count, uint8_t r, uint8_t g, uint8_t b)
     dirty_ = true;
 }
 
+void LedDriver::set_many(std::initializer_list<uint8_t> indices,
+                         uint8_t r, uint8_t g, uint8_t b)
+{
+    // Stage an arbitrary list of LEDs to one colour. set_one() bounds-checks
+    // each index, so out-of-range entries are silently ignored.
+    for (uint8_t index : indices) { set_one(index, r, g, b); }
+}
+
+void LedDriver::set_many_hsv(std::initializer_list<uint8_t> indices,
+                             float h, float s, float v)
+{
+    // HSV counterpart to set_many(). set_one_hsv() bounds-checks each index,
+    // so out-of-range entries are silently ignored.
+    for (uint8_t index : indices) { set_one_hsv(index, h, s, v); }
+}
+
 // --- HSV staging 
 
 void LedDriver::set_one_hsv(int index, float hue, float sat, float val)

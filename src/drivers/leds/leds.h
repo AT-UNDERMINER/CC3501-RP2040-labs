@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <initializer_list>
 
 class LedDriver {
 public:
@@ -30,6 +31,10 @@ public:
     void set_all  (uint8_t r, uint8_t g, uint8_t b);                         // Stage every LED to one colour
     void set_one  (int index, uint8_t r, uint8_t g, uint8_t b);              // Stage one LED; others unchanged
     void set_range(int start, int count, uint8_t r, uint8_t g, uint8_t b);   // Stage a contiguous range
+    void set_many (std::initializer_list<uint8_t> indices,
+                   uint8_t r, uint8_t g, uint8_t b);                         // Stage an arbitrary set of LEDs
+    void set_many_hsv(std::initializer_list<uint8_t> indices,
+                      float h, float s, float v);                            // Stage an arbitrary set of LEDs (HSV)
 
     // --- HSV staging 
     // HSV is often easier for animations than RGB:
