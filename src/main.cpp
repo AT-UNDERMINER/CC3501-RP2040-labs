@@ -12,9 +12,11 @@ void run_led_task();
 void exit_led_task();
 void run_accelerometer_task();
 void exit_accelerometer_task();
+void run_audio_task();
+void exit_audio_task();
 
-static void (*const task_run[])()  = { run_idle_task, run_led_task, run_accelerometer_task };
-static void (*const task_exit[])() = { exit_idle_task, exit_led_task, exit_accelerometer_task };
+static void (*const task_run[])()  = { run_idle_task, run_led_task, run_accelerometer_task, run_audio_task };
+static void (*const task_exit[])() = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
 static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]);
 
 int main()

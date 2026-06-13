@@ -74,9 +74,11 @@ if(CrossCompiling)
         src/tasks/led_task.cpp
         src/tasks/idle_task.cpp
         src/tasks/accelerometer_task.cpp
+        src/tasks/audio_task.cpp
         src/drivers/logging/logging.cpp
         src/drivers/leds/leds.cpp
         src/drivers/lis3dh/lis3dh.cpp
+        src/drivers/microphone/microphone.cpp
     )
     target_include_directories(labs
         PUBLIC
