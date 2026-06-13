@@ -69,7 +69,7 @@ void run_accelerometer_task()
         leds.set_all_hsv(120.0f, 1.0f, 0.8f);
     } else {
         // Tilted — bubble colour comes from how far it is tilted.
-        float hue = (magnitude >= MAG_RED) ? 0.0f : 5.0f; // red vs orange
+        float hue = (magnitude >= MAG_RED) ? 0.0f : 10.0f; // red vs orange
         float val = (magnitude >= MAG_RED) ? 1.0f : 1.0f;
 
         leds.off();
