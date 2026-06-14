@@ -19,7 +19,7 @@ static constexpr int NUM_LEDS    = 12;
 
 // Magnitude-squared sum above which an LED's band is considered "active".
 // Values here are in ~Q3.13 fixed point; expect to tune this on hardware.
-static constexpr int32_t LEVEL_THRESHOLD = 20;
+static constexpr int32_t LEVEL_THRESHOLD = 10;
 
 // --- Working buffers (file scope to keep them off the small main stack) -------
 static int16_t fft_output[FFT_SIZE * 2];   // arm_rfft_q15 output (2*FFT_SIZE)
