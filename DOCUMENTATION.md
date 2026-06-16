@@ -169,6 +169,11 @@ Single source of truth for board-specific constants:
 #define BOARD_LED_PIN      14
 #define BOARD_LED_COUNT    12
 #define BOARD_LED_IS_RGBW  false
+#define ACCEL_I2C_INSTANCE i2c0
+#define ACCEL_SDA_PIN      16
+#define ACCEL_SCL_PIN      17
+#define MIC_ADC_PIN        26
+#define MIC_ADC_CHANNEL    0
 ```
 
 Change these (not the driver/task source) when the hardware layout changes.
@@ -225,7 +230,8 @@ float lis3dh_to_g(int16_t raw);                                      // raw → 
 
 **Configuration (set in the driver / header):**
 
-- Bus: I²C0, SDA = GPIO16, SCL = GPIO17, **400 kHz** fast mode.
+- Bus: the I²C instance and SDA/SCL pins live in `board.h` (`ACCEL_I2C_INSTANCE`,
+  `ACCEL_SDA_PIN`, `ACCEL_SCL_PIN`); the **400 kHz** fast-mode baud stays in the driver.
 - Address `0x19` (SA0 high).
 - Output data rate selected by `LIS3DH_ODR_SELECT` (default **100 Hz**).
 - `CTRL_REG1 = ODR | 0x07` (normal mode, X/Y/Z enabled).
@@ -259,7 +265,8 @@ void microphone_read(uint16_t *buffer, uint16_t n);       // capture exactly n s
 
 **Behaviour:**
 
-- `adc_init`, `adc_gpio_init(26)`, `adc_select_input(0)`.
+- `adc_init`, `adc_gpio_init(MIC_ADC_PIN)`, `adc_select_input(MIC_ADC_CHANNEL)` —
+  pin and channel come from `board.h`.
 - FIFO enabled, no DMA, data-ready every sample, full 12-bit result kept.
 - Sample rate set via clock divider: `clkdiv = 48 MHz / 44.1 kHz − 1`
   (one sample every `clkdiv + 1` cycles).

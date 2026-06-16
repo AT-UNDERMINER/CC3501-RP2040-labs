@@ -6,7 +6,7 @@
 // Minimal driver for the ST LIS3DH 3-axis accelerometer over I2C.
 //
 // Wiring on this board:
-//   SDA = GPIO16, SCL = GPIO17, I2C bus = i2c0, 400 kHz (fast mode)
+//   Pins/bus in board.h (ACCEL_SDA_PIN, ACCEL_SCL_PIN, ACCEL_I2C_INSTANCE); 400 kHz fast mode
 //   CS pulled high externally  -> I2C mode selected
 //   SA0/SDO pulled up          -> 7-bit address 0x19
 //   SDA/SCL have external 4.7 kOhm pull-ups, so no internal pulls are enabled.
