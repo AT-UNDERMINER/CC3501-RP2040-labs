@@ -34,7 +34,8 @@ static constexpr uint8_t LIS3DH_ADDR = 0x19;
 // #define LIS3DH_ODR_SELECT    LIS3DH_ODR_400HZ
 
 // Initialise the bus and the device. Verifies WHO_AM_I (0x33) and configures
-// 100 Hz / high-resolution / +-2g. Returns false if the device is not found.
+// the selected ODR (LIS3DH_ODR_SELECT, default 100 Hz), high-resolution, +-2g.
+// Returns false if the device is not found.
 bool lis3dh_init(i2c_inst_t *i2c);
 
 // Read one sample from all three axes as 12-bit signed values (right-justified).

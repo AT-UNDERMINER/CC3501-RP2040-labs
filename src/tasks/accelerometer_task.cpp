@@ -7,24 +7,10 @@
 #include <math.h>
 #include "hardware/i2c.h"
 
-// I2C bus the LIS3DH is wired to (SDA=GPIO16, SCL=GPIO17).
-static i2c_inst_t *const ACCEL_I2C = i2c0;
+static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE;
 
 // A tilt of this many g on an axis is treated as "significantly tilted".
 // static constexpr float TILT_THRESHOLD = 0.1f;
-
-// LED groups on the 12-LED U-shape, one group per tilt direction.
-// (Indices are an assumption about the physical layout — adjust the ranges
-//  here if the lit side does not match the way the board actually tilts.)
-//   +X (tilt right)   -> LEDs 0..2     red
-//   +Y (tilt forward) -> LEDs 3..5     blue
-//   -X (tilt left)    -> LEDs 6..8     red
-//   -Y (tilt back)    -> LEDs 9..11    blue
-// static constexpr int GROUP_LEN     = 3;
-// static constexpr int GROUP_POS_X   = 0;  // tilt right
-// static constexpr int GROUP_POS_Y   = 3;  // tilt forward
-// static constexpr int GROUP_NEG_X   = 9;  // tilt left
-// static constexpr int GROUP_NEG_Y   = 6;  // tilt back
 
 // Lazily-constructed driver instance shared by run/exit, matching the other tasks.
 static LedDriver& get_leds()
@@ -40,7 +26,7 @@ void run_accelerometer_task()
 {
     LedDriver &leds = get_leds();
 
-    // One-time setup the first time the task runs (or after exit reset the flag).
+    // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
         leds.set_busy_wait(false);
         lis3dh_init(ACCEL_I2C);
@@ -88,6 +74,7 @@ void run_accelerometer_task()
             // angle 0 (forward) -> back centre, +pi/2 (right) -> left side,
             // -pi/2 (left) -> right side; back tilts are handled above.
             float angle = atan2f(gx, gy);
+            // 5.5 = back-centre index; 8/π ≈ 4 LED steps per 90° of tilt.
             int idx = (int)lroundf(5.5f + angle * (8.0f / PI_F));
             if (idx < 0)  idx = 0;
             if (idx > 11) idx = 11;

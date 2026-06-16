@@ -50,14 +50,14 @@ void run_audio_task()
 {
     LedDriver &leds = get_leds();
 
-    // One-time setup the first time the task runs (or after exit reset the flag).
+    // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
         leds.set_busy_wait(false);
         microphone_init();
         arm_rfft_init_q15(&rfft, FFT_SIZE, 0, 1); // forward, bit-reversed output
 
-        // Pre-compute the Hanning window once. Float is acceptable here because
-        // it runs a single time at init, never in the per-frame processing path.
+        // Pre-compute the Hanning window. Float is fine here: runs once at init,
+        // never in the per-frame processing loop.
         for (int n = 0; n < FFT_SIZE; n++) {
             hanning[n] = (int16_t)(0.5f * (1.0f - cosf(2.0f * M_PI * n / (FFT_SIZE - 1))) * 32767);
         }

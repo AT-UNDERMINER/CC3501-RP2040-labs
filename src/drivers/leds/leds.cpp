@@ -19,7 +19,7 @@ static constexpr uint32_t WS2812_RESET_US = 300;
 void LedDriver::write_leds() const
 {
     for (const Colour &c : colours_) {
-        // Pack into the top 24 bits: R[31:24] G[23:16] B[15:8]
+        // Pack into the top 24 bits in WS2812 GRB wire order: G[31:24] R[23:16] B[15:8]
         // Explicit uint32_t cast prevents undefined behaviour for values >= 128
         uint32_t word = ((uint32_t)c.g << 24)
                       | ((uint32_t)c.r << 16)
@@ -169,12 +169,7 @@ LedDriver::Colour LedDriver::get_one(int index) const
     return colours_[index];
 }
 
-// Returns true if any staged change has not yet been sent to the hardware.
-// The flag is set automatically by every set_*() call and cleared by show().
-//
-// Typical use: check has_pending_changes() before calling show() to avoid
-// sending an unnecessary frame when nothing has changed — useful in tight
-// loops where the LED state may or may not have been updated on a given iteration.
+// True while changes are staged but unsent — set by every set_*(), cleared by show().
 bool LedDriver::has_pending_changes() const
 {
     return dirty_;

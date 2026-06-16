@@ -1,13 +1,13 @@
 #include "lis3dh.h"
+#include "board.h"
 
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
 // --- Pin / bus configuration -------------------------------------------------
-static constexpr uint  LIS3DH_SDA_PIN = 16;
-static constexpr uint  LIS3DH_SCL_PIN = 17;
-static constexpr uint  LIS3DH_BAUD    = 400000; // 400 kHz fast mode
+// Pins live in board.h (wiring); the baud rate is a bus fact, so it stays here.
+static constexpr uint  LIS3DH_BAUD = 400000; // 400 kHz fast mode
 
 // --- Register map (subset used here) -----------------------------------------
 static constexpr uint8_t REG_WHO_AM_I  = 0x0F;
@@ -39,8 +39,8 @@ bool lis3dh_init(i2c_inst_t *i2c)
     // Bring up the I2C peripheral and route the pins. External pull-ups are
     // already fitted, so internal pulls are deliberately left disabled.
     i2c_init(i2c, LIS3DH_BAUD);
-    gpio_set_function(LIS3DH_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(LIS3DH_SCL_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(ACCEL_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(ACCEL_SCL_PIN, GPIO_FUNC_I2C);
 
     // Confirm we are talking to a LIS3DH before configuring anything.
     uint8_t who = read_reg(i2c, REG_WHO_AM_I);

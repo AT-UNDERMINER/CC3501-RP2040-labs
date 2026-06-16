@@ -60,15 +60,10 @@ public:
     void off();   // Stage all LEDs off (equivalent to set_all(0,0,0))
     void show();  // Send all staged changes to the hardware and clear the dirty flag
 
-    // Enable or disable the 300 µs busy-wait that show() performs after sending data.
-    //
-    // The WS2812 protocol requires the data line to stay idle for at least 280 µs
-    // between frames so the LEDs can latch their new values (the "reset pulse").
-    //
-    // Enabled (default) — safe for any refresh rate; show() always waits before returning.
-    // Disabled          — use when your code already guarantees more than 280 µs between
-    //                     calls to show() (e.g. a 500 ms animation loop), removing a small
-    //                     but unnecessary CPU stall.
+    // Enable/disable the post-show() busy-wait for the WS2812 reset pulse (the data
+    // line must stay idle at least 280 µs so the LEDs latch). Enabled (default) is
+    // always safe; disable only when your loop already leaves >280 µs between show()
+    // calls, to skip the stall.
     void set_busy_wait(bool enabled);
 
 private:

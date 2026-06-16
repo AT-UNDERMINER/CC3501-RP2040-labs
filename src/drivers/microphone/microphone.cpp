@@ -1,16 +1,13 @@
 #include "microphone.h"
+#include "board.h"
 
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 
-// --- Hardware configuration --------------------------------------------------
-static constexpr uint MIC_ADC_GPIO    = 26; // ADC channel 0 input pin
-static constexpr uint MIC_ADC_CHANNEL = 0;
-
 void microphone_init()
 {
     adc_init();
-    adc_gpio_init(MIC_ADC_GPIO);
+    adc_gpio_init(MIC_ADC_PIN);
     adc_select_input(MIC_ADC_CHANNEL);
 
     // Enable the FIFO with no DMA, raise data-ready on every sample, and keep

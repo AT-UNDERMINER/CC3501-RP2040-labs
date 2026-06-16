@@ -17,7 +17,7 @@ void exit_audio_task();
 
 static void (*const task_run[])()  = { run_idle_task, run_led_task, run_accelerometer_task, run_audio_task };
 static void (*const task_exit[])() = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
-static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]);
+static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]); // array-length idiom; grows with the arrays
 
 int main()
 {
@@ -32,41 +32,38 @@ int main()
     int  current_task   = 0;
 
     for (;;) {
-        // a. Run one frame/step of the current task
+        // One cooperative frame of the current task, then back to polling.
         task_run[current_task]();
 
-        // b. Poll GPIO15 for a button press (rising edge)
+        // Poll SW1 (GPIO15); a rising edge begins press handling.
         bool state = gpio_get(SW1_PIN);
 
         if (state && !last_state) {
-            // Rising edge detected — wait one RC time constant for the signal to settle,
-            // then confirm the pin is still high before treating it as a genuine press.
-            // With a 100 kΩ / 100 nF RC filter (τ = 10 ms), 20 ms covers 2τ and is
-            // sufficient; the hardware has already suppressed sub-millisecond glitches.
+            // Confirm it's real: wait ~2τ and re-read. The 100 kΩ / 100 nF filter
+            // (τ = 10 ms) already removes sub-millisecond glitches, so 20 ms settles it.
             sleep_ms(20);
             if (gpio_get(SW1_PIN)) {
                 button_pressed = true;
                 printf("Button pressed\n");
 
-                // Block until the button is released so a single press cannot
-                // re-trigger on the next polling iteration.
+                // Wait for release so one physical press is one logical press.
                 while (gpio_get(SW1_PIN)) {
                     sleep_ms(5);
                 }
             }
-            last_state = false; // pin is now LOW after the release wait
+            last_state = false; // pin is LOW again after the release wait
         } else {
             last_state = state;
         }
 
-        // c. Switch to the next task on a button press
+        // Confirmed press: clean up the task and advance.
         if (button_pressed) {
             task_exit[current_task]();
             current_task = (current_task + 1) % NUM_TASKS;
             button_pressed = false;
         }
 
-        sleep_ms(5); // polling interval — well above the RC filter's settling time
+        sleep_ms(5); // poll interval — comfortably above the RC settling time
     }
 
     return 0;
