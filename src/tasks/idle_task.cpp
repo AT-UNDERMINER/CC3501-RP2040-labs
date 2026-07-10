@@ -5,9 +5,12 @@
 #include <numbers> // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literals
 
 // 1 s rise (off → peak) + 1 s fall (peak → off) = 2 s full cycle.
-// main's loop is paced by sleep_ms(5), so steps per cycle = 2000 / 5 = 400.
-static constexpr float TWO_PI      = 2.0f * std::numbers::pi_v<float>;
-static constexpr float BREATH_STEP = TWO_PI / 400.0f;                  // phase advance per call
+// COUPLED to main.cpp's LOOP_PERIOD_MS: one frame runs per loop pass, so
+// steps per cycle = 2000 ms / LOOP_PERIOD_MS (5 ms). If the loop period
+// changes there, STEPS_PER_CYCLE must change here to keep the 2 s breathe.
+static constexpr float STEPS_PER_CYCLE = 400.0f;
+static constexpr float TWO_PI          = 2.0f * std::numbers::pi_v<float>;
+static constexpr float BREATH_STEP     = TWO_PI / STEPS_PER_CYCLE; // phase advance per call
 static constexpr float PHASE_START = 1.5f * std::numbers::pi_v<float>; // 3π/2: sin = -1, brightness opens at 0
 static constexpr float BLUE_HUE    = 240.0f;
 static constexpr float PEAK_VAL    = 0.07f;       // peak brightness — deliberately dim

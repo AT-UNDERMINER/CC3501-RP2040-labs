@@ -16,6 +16,10 @@ static void (*const task_run[])(LedDriver&)  = { run_idle_task, run_led_task, ru
 static void (*const task_exit[])(LedDriver&) = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
 static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]); // array-length idiom; grows with the arrays
 
+// Pacing for the scheduler loop and button polling. idle_task's breathing
+// maths derives its steps-per-cycle from this value — change one, check the other.
+static constexpr int LOOP_PERIOD_MS = 5;
+
 int main()
 {
     stdio_init_all();
@@ -52,7 +56,7 @@ int main()
 
                 // Wait for release so one physical press is one logical press.
                 while (gpio_get(SW1_PIN)) {
-                    sleep_ms(5);
+                    sleep_ms(LOOP_PERIOD_MS);
                 }
             }
             last_state = false; // pin is LOW again after the release wait
@@ -67,7 +71,7 @@ int main()
             button_pressed = false;
         }
 
-        sleep_ms(5); // poll interval — comfortably above the RC settling time
+        sleep_ms(LOOP_PERIOD_MS); // poll interval — comfortably above the RC settling time
     }
 
     return 0;

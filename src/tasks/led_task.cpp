@@ -7,6 +7,9 @@
 // Each demo step is held for this many calls before advancing.
 static constexpr int FRAMES_PER_STEP = 100;
 
+// Number of demo steps — must match the cases in run_led_task()'s switch.
+static constexpr int NUM_STEPS = 6;
+
 void run_led_task(LedDriver &leds)
 {
     static int step          = 0;
@@ -64,11 +67,11 @@ void run_led_task(LedDriver &leds)
         }
     }
 
-    // Hold each step for FRAMES_PER_STEP frames, then advance; wrap over the 6 steps.
+    // Hold each step for FRAMES_PER_STEP frames, then advance and wrap.
     frame_counter++;
     if (frame_counter >= FRAMES_PER_STEP) {
         frame_counter = 0;
-        step = (step + 1) % 6;
+        step = (step + 1) % NUM_STEPS;
     }
 }
 

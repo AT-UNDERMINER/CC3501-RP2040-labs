@@ -156,12 +156,13 @@ and detect button presses, and switch tasks.
   3. The code waits `20 ms` (≈ 2 RC time constants) and re-reads the pin to
      confirm a real press, not a glitch. The RC filter has already removed
      sub-millisecond noise; this confirms the level has settled.
-  4. It then **blocks until release** (polling every 5 ms) so one physical
-     press maps to exactly one logical press.
+  4. It then **blocks until release** (polling every `LOOP_PERIOD_MS`) so one
+     physical press maps to exactly one logical press.
   5. On a confirmed press, `task_exit[current_task](leds)` runs and
      `current_task` advances modulo `NUM_TASKS`.
-- **Loop pacing:** `sleep_ms(5)` at the end sets the polling interval, well
-  above the RC settling time.
+- **Loop pacing:** `sleep_ms(LOOP_PERIOD_MS)` (5 ms) at the end sets the
+  polling interval, well above the RC settling time. idle_task's breathing
+  maths derives its steps-per-cycle from this period.
 
 **Design note — polling, not interrupts.** Because SW1 already has hardware RC
 debouncing and the loop is fast enough, polling is simpler and sufficient; an

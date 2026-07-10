@@ -68,6 +68,8 @@ void run_accelerometer_task(LedDriver &leds)
     // all-green means the board is flat.
     const float LEVEL_THRESHOLD = 0.05f; // |X| and |Y| under this counts as level
     const float MAG_RED         = 0.50f; // tilt magnitude at/above this -> red bubble
+    const float BACK_CENTRE_INDEX = 5.5f;                // bubble index facing straight back (between LEDs 5 and 6)
+    const int   MAX_LED_INDEX     = BOARD_LED_COUNT - 1; // clamp bound from board.h, not a magic 11
 
     float magnitude = sqrtf(gx * gx + gy * gy);
 
@@ -95,9 +97,9 @@ void run_accelerometer_task(LedDriver &leds)
             // angle 0 (forward) -> back centre, +pi/2 (right) -> left side,
             // -pi/2 (left) -> right side; back tilts are handled above.
             float angle = atan2f(gx, gy);
-            // 5.5 = back-centre index; 8/π ≈ 4 LED steps per 90° of tilt.
-            int idx = (int)lroundf(5.5f + angle * (8.0f / std::numbers::pi_v<float>));
-            idx = std::clamp(idx, 0, 11);
+            // 8/π ≈ 4 LED steps per 90° of tilt.
+            int idx = (int)lroundf(BACK_CENTRE_INDEX + angle * (8.0f / std::numbers::pi_v<float>));
+            idx = std::clamp(idx, 0, MAX_LED_INDEX);
             leds.set_one_hsv(idx, hue, 1.0f, val);
         }
     }
