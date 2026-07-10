@@ -27,6 +27,9 @@ int main()
     // The one LedDriver for the whole program. Constructing it loads the PIO
     // program and starts the state machine, so it must happen exactly once.
     LedDriver leds(BOARD_LED_COUNT);
+    // The 5 ms loop pacing below always exceeds the WS2812 reset pulse, so
+    // show() never needs to busy-wait for it — set once here for every task.
+    leds.set_busy_wait(false);
 
     bool button_pressed = false;
     bool last_state     = false;

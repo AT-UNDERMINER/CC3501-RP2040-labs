@@ -7,12 +7,10 @@
 #include <math.h>          // cosf — used only in one-time window pre-compute
 #include <numbers>         // C++20 std::numbers::pi — replaces a hand-typed literal
 #include "arm_math.h"      // CMSIS-DSP: q15_t, arm_rfft_q15, arm_cmplx_mag_squared_q15
-#include "hardware/adc.h"  // adc_run / FIFO drain in exit_audio_task
 
 // --- Constants ---------------------------------------------------------------
-static constexpr int FFT_SIZE    = 1024;
-static constexpr int SAMPLE_RATE = 44100;
-static constexpr int NUM_LEDS    = 12;
+static constexpr int FFT_SIZE = 1024;
+static constexpr int NUM_LEDS = 12;
 
 // Magnitude-squared sum above which an LED's band is considered "active".
 // Values here are in ~Q3.13 fixed point; expect to tune this on hardware.
@@ -26,7 +24,8 @@ static q15_t   hanning[FFT_SIZE];          // pre-computed Hanning window
 static uint16_t sample_buffer[FFT_SIZE];   // raw 12-bit ADC samples
 static q15_t    time_domain[FFT_SIZE];     // centred / scaled / windowed input
 
-// Log-spaced FFT bin boundaries: 13 edges define 12 LED bands.
+// Log-spaced FFT bin boundaries: 13 edges define 12 LED bands. Edges assume
+// MICROPHONE_SAMPLE_RATE_HZ (44.1 kHz) and FFT_SIZE 1024 -> ~43 Hz per bin.
 static const int bin_edges[NUM_LEDS + 1] = {
     6, 8, 11, 16, 24, 35, 51, 75, 110, 161, 237, 349, 513
 };
@@ -40,7 +39,6 @@ void run_audio_task(LedDriver &leds)
 {
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
-        leds.set_busy_wait(false);
         microphone_init();
         arm_rfft_init_q15(&rfft, FFT_SIZE, 0, 1); // forward, bit-reversed output
 
@@ -118,12 +116,8 @@ void run_audio_task(LedDriver &leds)
 
 void exit_audio_task(LedDriver &leds)
 {
-    // Stop sampling and clear anything left in the FIFO (is_empty() checked
-    // first so the drain never blocks waiting for a sample that won't come).
-    adc_run(false);
-    while (!adc_fifo_is_empty()) {
-        adc_fifo_get_blocking();
-    }
+    // Stop sampling — the driver stops the ADC and drains the FIFO.
+    microphone_stop();
 
     // Turn off every LED.
     leds.off();

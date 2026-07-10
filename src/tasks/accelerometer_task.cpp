@@ -36,7 +36,6 @@ void run_accelerometer_task(LedDriver &leds)
             s_init_retry_countdown--;
             return;
         }
-        leds.set_busy_wait(false);
         if (!lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ)) {
             // Flag stays false so a later frame retries instead of streaming
             // garbage from an unconfigured device.

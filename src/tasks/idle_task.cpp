@@ -14,15 +14,7 @@ static constexpr float PEAK_VAL    = 0.07f;       // peak brightness — deliber
 
 void run_idle_task(LedDriver &leds)
 {
-    static bool  initialized  = false;
     static float breath_phase = PHASE_START;
-
-    if (!initialized) {
-        // The 5 ms main loop already outlasts the WS2812 reset pulse, so show()
-        // needn't busy-wait for it.
-        leds.set_busy_wait(false);
-        initialized = true;
-    }
 
     // (sin + 1) * 0.5 maps the wave to 0..1; PEAK_VAL caps the brightness.
     float val = PEAK_VAL * (sinf(breath_phase) + 1.0f) * 0.5f;

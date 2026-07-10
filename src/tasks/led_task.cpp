@@ -9,16 +9,8 @@ static constexpr int FRAMES_PER_STEP = 100;
 
 void run_led_task(LedDriver &leds)
 {
-    static bool initialized   = false;
-    static int  step          = 0;
-    static int  frame_counter = 0;
-
-    if (!initialized) {
-        // The 5 ms main loop already outlasts the WS2812 reset pulse, so show()
-        // needn't busy-wait for it.
-        leds.set_busy_wait(false);
-        initialized = true;
-    }
+    static int step          = 0;
+    static int frame_counter = 0;
 
     // Each step's setup runs once (on its first frame); the rest hold the display.
     if (frame_counter == 0) {

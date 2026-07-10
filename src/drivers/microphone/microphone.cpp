@@ -20,7 +20,7 @@ void microphone_init()
 
     // 48 MHz ADC clock divided down to the target sample rate. The RP2040
     // produces one sample every (clkdiv + 1) cycles, hence the "- 1".
-    float clkdiv = (48000000.0f / 44100.0f) - 1.0f;
+    float clkdiv = (48000000.0f / (float)MICROPHONE_SAMPLE_RATE_HZ) - 1.0f;
     adc_set_clkdiv(clkdiv);
 
     // Free-running mode is left off until microphone_read() is called.
@@ -34,10 +34,15 @@ void microphone_read(uint16_t *buffer, uint16_t num_samples)
         buffer[i] = adc_fifo_get_blocking();
     }
 
+    microphone_stop();
+}
+
+void microphone_stop()
+{
     adc_run(false);
 
-    // Discard any samples captured after our block so the next read starts
-    // from a clean FIFO. is_empty() is checked first so we never block here.
+    // Discard any samples captured after the last block so the next capture
+    // starts from a clean FIFO. is_empty() is checked first so we never block.
     while (!adc_fifo_is_empty()) {
         adc_fifo_get_blocking();
     }

@@ -218,7 +218,8 @@ A C++ class that drives the WS2812B chain over **PIO**. It uses a
   (hue 0–360, sat/val 0–1).
 - **Reset pulse:** `show()` optionally busy-waits `300 µs` (spec min 280 µs)
   so the LEDs latch. Disable with `set_busy_wait(false)` when the caller's
-  own loop already guarantees > 280 µs between frames (all tasks do this).
+  own loop already guarantees > 280 µs between frames (`main()` does this
+  once for the shared driver, since the 5 ms loop always qualifies).
 - Copy construction/assignment are **deleted** — a hardware driver must not be
   duplicated.
 
@@ -279,6 +280,7 @@ read fixed-size blocks.
 ```cpp
 void microphone_init();                                   // configure ADC + FIFO, 44.1 kHz
 void microphone_read(uint16_t *buffer, uint16_t n);       // capture exactly n samples (blocking)
+void microphone_stop();                                   // stop sampling + drain the FIFO; safe if not running
 ```
 
 **Behaviour:**
@@ -300,7 +302,8 @@ Default startup task. A slow **blue "breathing"** animation across all 12 LEDs.
   (deliberately dim).
 - A `static` phase accumulator advances `BREATH_STEP` each frame; one full
   breathe is ~2 s given the 5 ms loop.
-- Disables the LED reset busy-wait once (the loop is already slow enough).
+- No one-time setup of its own — the shared driver's reset busy-wait is
+  disabled once in `main()` right after construction, not per task.
 - `exit` turns all LEDs off.
 
 ### `tasks/led_task`
@@ -385,8 +388,9 @@ No other changes are needed — `NUM_TASKS` is computed from the array size.
 ## Conventions
 
 - `run_*` is non-blocking and keeps state in `static` locals.
-- One-time hardware init is guarded by a `static bool` flag that `exit_*`
-  resets, so re-entering a task re-initialises cleanly.
+- Tasks with real per-session setup (accelerometer, audio) guard it with a
+  `static bool` flag that `exit_*` resets, so re-entering re-initialises
+  cleanly; the LED-only tasks (idle, led) need no init flag.
 - Drivers never reach into task logic and vice versa.
 - Board-specific constants live only in `board.h`.
 - LED writes are staged; nothing reaches the hardware until `show()`.
