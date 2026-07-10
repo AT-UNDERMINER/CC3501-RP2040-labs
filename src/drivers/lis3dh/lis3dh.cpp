@@ -34,7 +34,7 @@ static uint8_t read_reg(i2c_inst_t *i2c, uint8_t reg)
     return value;
 }
 
-bool lis3dh_init(i2c_inst_t *i2c)
+bool lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr)
 {
     // Bring up the I2C peripheral and route the pins. External pull-ups are
     // already fitted, so internal pulls are deliberately left disabled.
@@ -50,13 +50,36 @@ bool lis3dh_init(i2c_inst_t *i2c)
         return false;
     }
 
-    // CTRL_REG1: selected ODR | 0x07 (LPen=0 normal mode, Z/Y/X enabled).
-    uint8_t ctrl_reg1 = LIS3DH_ODR_SELECT | 0x07;
-    write_reg(i2c, REG_CTRL_REG1, ctrl_reg1);
+    // CTRL_REG1 lower nibble = 0x07 (LPen=0 normal mode, Z/Y/X enabled); the ODR
+    // bits go through lis3dh_set_odr() so only one code path writes them.
+    write_reg(i2c, REG_CTRL_REG1, 0x07);
+    if (!lis3dh_set_odr(i2c, start_odr)) {
+        return false;
+    }
     // CTRL_REG4 = 0x88: BDU=1, HR=1 (12-bit), FS=00 (+-2g).
     write_reg(i2c, REG_CTRL_REG4, 0x88);
 
     return true;
+}
+
+bool lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr)
+{
+    // Read-modify-write: replace only ODR[3:0] (the upper nibble of CTRL_REG1),
+    // keep LPen/Zen/Yen/Xen as they are. i2c_*_blocking returns the byte count
+    // on success or a negative error code, so compare against the count.
+    uint8_t reg = REG_CTRL_REG1;
+    uint8_t current;
+    if (i2c_write_blocking(i2c, LIS3DH_ADDR, &reg, 1, true) != 1) return false;
+    if (i2c_read_blocking(i2c, LIS3DH_ADDR, &current, 1, false) != 1) return false;
+
+    uint8_t buf[2] = { REG_CTRL_REG1, (uint8_t)((current & 0x0F) | (uint8_t)odr) };
+    return i2c_write_blocking(i2c, LIS3DH_ADDR, buf, 2, false) == 2;
+}
+
+bool lis3dh_power_down(i2c_inst_t *i2c)
+{
+    // ODR = 0000 is power-down mode (datasheet Table 25).
+    return lis3dh_set_odr(i2c, lis3dh_odr_t::POWERDOWN);
 }
 
 void lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, int16_t *y, int16_t *z)

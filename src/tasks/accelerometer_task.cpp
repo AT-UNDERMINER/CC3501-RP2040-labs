@@ -5,9 +5,8 @@
 
 #include <stdio.h>
 #include <math.h>
-#include "hardware/i2c.h"
 
-static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE;
+static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in via lis3dh.h
 
 // A tilt of this many g on an axis is treated as "significantly tilted".
 // static constexpr float TILT_THRESHOLD = 0.1f;
@@ -29,7 +28,7 @@ void run_accelerometer_task()
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
         leds.set_busy_wait(false);
-        lis3dh_init(ACCEL_I2C);
+        lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ);
         s_initialised = true;
     }
 
@@ -119,9 +118,8 @@ void run_accelerometer_task()
 
 void exit_accelerometer_task()
 {
-    // Power the LIS3DH down: CTRL_REG1 = 0x00 (ODR=0 -> power-down mode).
-    uint8_t buf[2] = { 0x20, 0x00 };
-    i2c_write_blocking(ACCEL_I2C, LIS3DH_ADDR, buf, 2, false);
+    // Stop sampling — the driver handles the power-down register write.
+    lis3dh_power_down(ACCEL_I2C);
 
     // Turn off every LED.
     LedDriver &leds = get_leds();

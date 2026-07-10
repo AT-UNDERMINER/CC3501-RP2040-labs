@@ -223,7 +223,9 @@ as their first argument.
 **Public API (header):**
 
 ```cpp
-bool  lis3dh_init(i2c_inst_t *i2c);                                  // bring up + verify + configure
+bool  lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr);          // bring up + verify + configure
+bool  lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr);             // change ODR at runtime
+bool  lis3dh_power_down(i2c_inst_t *i2c);                            // ODR = 0000 → power-down mode
 void  lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, *y, *z);          // one 3-axis sample (12-bit signed)
 float lis3dh_to_g(int16_t raw);                                      // raw → g
 ```
@@ -233,8 +235,12 @@ float lis3dh_to_g(int16_t raw);                                      // raw → 
 - Bus: the I²C instance and SDA/SCL pins live in `board.h` (`ACCEL_I2C_INSTANCE`,
   `ACCEL_SDA_PIN`, `ACCEL_SCL_PIN`); the **400 kHz** fast-mode baud stays in the driver.
 - Address `0x19` (SA0 high).
-- Output data rate selected by `LIS3DH_ODR_SELECT` (default **100 Hz**).
-- `CTRL_REG1 = ODR | 0x07` (normal mode, X/Y/Z enabled).
+- Output data rate is chosen **at runtime**: `lis3dh_init()` takes a starting
+  rate from the `lis3dh_odr_t` enum (`POWERDOWN`, `ODR_1HZ` … `ODR_400HZ`,
+  pre-shifted CTRL_REG1 values), and `lis3dh_set_odr()` changes it later.
+- `CTRL_REG1`: init writes the lower nibble `0x07` (normal mode, X/Y/Z enabled);
+  the ODR bits are applied only through `lis3dh_set_odr()`, which
+  read-modify-writes the register so the mode/axis bits are preserved.
 - `CTRL_REG4 = 0x88` (BDU on, high-resolution 12-bit, ±2 g).
 
 **Key behaviours:**
@@ -306,13 +312,14 @@ A cycling **demonstration** of the LED driver API. Six steps, each held for
 A **spirit/bubble level**. Reads the LIS3DH each frame, prints X/Y/Z in g over
 serial, and shows tilt on the LED ring.
 
-- One-time `lis3dh_init` on first run (flag reset on exit).
+- One-time `lis3dh_init` at `lis3dh_odr_t::ODR_100HZ` on first run (flag reset
+  on exit).
 - **Level** (|X| and |Y| < `LEVEL_THRESHOLD = 0.05 g`): all LEDs steady green.
 - **Tilted:** the tilt direction is mapped to a single "bubble" LED around the
   U-shape using `atan2f(gx, gy)`; bubble colour is orange below `MAG_RED` and
   red at/above it, so colour encodes tilt magnitude. Special cases handle the
   gap at the front of the U.
-- `exit` powers the LIS3DH down (`CTRL_REG1 = 0x00`), turns LEDs off, and
+- `exit` powers the LIS3DH down via `lis3dh_power_down()`, turns LEDs off, and
   resets the init flag.
 
 > Two earlier lighting approaches are kept commented out in the source as
@@ -350,7 +357,7 @@ off, and resets the init flag.
 
 1. Create `src/tasks/<name>_task.cpp` and `.h` with
    `run_<name>_task()` / `exit_<name>_task()`.
-2. In `main.cpp`, add the two forward declarations and append the function
+2. In `main.cpp`, `#include "tasks/<name>_task.h"` and append the function
    names to `task_run[]` and `task_exit[]` **in the same order**.
 3. Add the `.cpp` to `target_sources(labs …)` in `CMakeLists.txt`.
 

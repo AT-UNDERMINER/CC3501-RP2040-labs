@@ -14,29 +14,33 @@
 // 7-bit I2C address (SA0 high).
 static constexpr uint8_t LIS3DH_ADDR = 0x19;
 
-// Output data rate (ODR) values for CTRL_REG1 ODR[3:0], pre-shifted into the
-// upper nibble (datasheet Table 25).
-#define LIS3DH_ODR_1HZ      0x10
-#define LIS3DH_ODR_10HZ     0x20
-#define LIS3DH_ODR_25HZ     0x30
-#define LIS3DH_ODR_50HZ     0x40
-#define LIS3DH_ODR_100HZ    0x50
-#define LIS3DH_ODR_200HZ    0x60
-#define LIS3DH_ODR_400HZ    0x70
+// Output data rate values for CTRL_REG1 ODR[3:0], pre-shifted into the upper
+// nibble (datasheet Table 25). POWERDOWN is ODR = 0000 — the chip's power-down
+// state, not a sample rate.
+// enum class: scoped enum — values need the lis3dh_odr_t:: prefix and won't
+// silently convert to int, so a raw number can't be passed by accident.
+enum class lis3dh_odr_t : uint8_t {
+    POWERDOWN = 0x00,
+    ODR_1HZ   = 0x10,
+    ODR_10HZ  = 0x20,
+    ODR_25HZ  = 0x30,
+    ODR_50HZ  = 0x40,
+    ODR_100HZ = 0x50,
+    ODR_200HZ = 0x60,
+    ODR_400HZ = 0x70,
+};
 
-// Select the desired output data rate — uncomment one line only
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_1HZ
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_10HZ
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_25HZ
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_50HZ
-#define LIS3DH_ODR_SELECT       LIS3DH_ODR_100HZ
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_200HZ
-// #define LIS3DH_ODR_SELECT    LIS3DH_ODR_400HZ
-
-// Initialise the bus and the device. Verifies WHO_AM_I (0x33) and configures
-// the selected ODR (LIS3DH_ODR_SELECT, default 100 Hz), high-resolution, +-2g.
+// Initialise the bus and the device. Verifies WHO_AM_I (0x33), enables X/Y/Z
+// in normal mode at start_odr, and configures high-resolution +-2g.
 // Returns false if the device is not found.
-bool lis3dh_init(i2c_inst_t *i2c);
+bool lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr);
+
+// Change the ODR without touching the other CTRL_REG1 bits (read-modify-write).
+// Returns false if the I2C transaction fails.
+bool lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr);
+
+// Put the device into power-down mode. Wake it again with lis3dh_set_odr().
+bool lis3dh_power_down(i2c_inst_t *i2c);
 
 // Read one sample from all three axes as 12-bit signed values (right-justified).
 void lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, int16_t *y, int16_t *z);

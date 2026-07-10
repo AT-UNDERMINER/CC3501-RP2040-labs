@@ -1,19 +1,14 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
-#include "board.h"
+#include "board.h" // board-specific pin and bus configuration
 
-// Forward declarations of task run/exit functions.
-// To add a new task: declare its run/exit functions here and add them to
-// task_run[] / task_exit[] below in the same order — no other changes needed.
-void run_idle_task();
-void exit_idle_task();
-void run_led_task();
-void exit_led_task();
-void run_accelerometer_task();
-void exit_accelerometer_task();
-void run_audio_task();
-void exit_audio_task();
+// task run/exit functions for each task
+#include "tasks/led_task.h" 
+#include "tasks/accelerometer_task.h"
+#include "tasks/audio_task.h"
+#include "tasks/idle_task.h"
+
 
 static void (*const task_run[])()  = { run_idle_task, run_led_task, run_accelerometer_task, run_audio_task };
 static void (*const task_exit[])() = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
