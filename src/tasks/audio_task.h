@@ -1,4 +1,6 @@
 #pragma once
 
-void run_audio_task();
-void exit_audio_task();
+class LedDriver; // forward declaration — a reference param doesn't need the full type
+
+void run_audio_task(LedDriver &leds);
+void exit_audio_task(LedDriver &leds);

@@ -7,16 +7,8 @@
 // Each demo step is held for this many calls before advancing.
 static constexpr int FRAMES_PER_STEP = 100;
 
-// Lazily-constructed driver instance shared by run_led_task() and exit_led_task().
-static LedDriver& get_leds()
+void run_led_task(LedDriver &leds)
 {
-    static LedDriver leds(BOARD_LED_COUNT);
-    return leds;
-}
-
-void run_led_task()
-{
-    LedDriver &leds = get_leds();
     static bool initialized   = false;
     static int  step          = 0;
     static int  frame_counter = 0;
@@ -88,9 +80,8 @@ void run_led_task()
     }
 }
 
-void exit_led_task()
+void exit_led_task(LedDriver &leds)
 {
-    LedDriver &leds = get_leds();
     leds.off();
     leds.show();
 }

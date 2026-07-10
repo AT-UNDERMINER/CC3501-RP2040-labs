@@ -11,20 +11,11 @@ static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in 
 // A tilt of this many g on an axis is treated as "significantly tilted".
 // static constexpr float TILT_THRESHOLD = 0.1f;
 
-// Lazily-constructed driver instance shared by run/exit, matching the other tasks.
-static LedDriver& get_leds()
-{
-    static LedDriver leds(BOARD_LED_COUNT);
-    return leds;
-}
-
 // Tracks whether the LIS3DH has been brought up for the current task session.
 static bool s_initialised = false;
 
-void run_accelerometer_task()
+void run_accelerometer_task(LedDriver &leds)
 {
-    LedDriver &leds = get_leds();
-
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
         leds.set_busy_wait(false);
@@ -116,13 +107,12 @@ void run_accelerometer_task()
 
 }
 
-void exit_accelerometer_task()
+void exit_accelerometer_task(LedDriver &leds)
 {
     // Stop sampling — the driver handles the power-down register write.
     lis3dh_power_down(ACCEL_I2C);
 
     // Turn off every LED.
-    LedDriver &leds = get_leds();
     leds.off();
     leds.show();
 

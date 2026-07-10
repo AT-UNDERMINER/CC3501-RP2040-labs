@@ -39,17 +39,8 @@ static arm_rfft_instance_q15 rfft;
 // Tracks whether the FFT/mic pipeline has been initialised this session.
 static bool s_initialised = false;
 
-// Lazily-constructed driver instance shared by run/exit, matching the other tasks.
-static LedDriver& get_leds()
+void run_audio_task(LedDriver &leds)
 {
-    static LedDriver leds(BOARD_LED_COUNT);
-    return leds;
-}
-
-void run_audio_task()
-{
-    LedDriver &leds = get_leds();
-
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
         leds.set_busy_wait(false);
@@ -128,7 +119,7 @@ void run_audio_task()
     leds.show();
 }
 
-void exit_audio_task()
+void exit_audio_task(LedDriver &leds)
 {
     // Stop sampling and clear anything left in the FIFO (is_empty() checked
     // first so the drain never blocks waiting for a sample that won't come).
@@ -138,7 +129,6 @@ void exit_audio_task()
     }
 
     // Turn off every LED.
-    LedDriver &leds = get_leds();
     leds.off();
     leds.show();
 

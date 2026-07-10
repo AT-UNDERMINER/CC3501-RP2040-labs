@@ -2,16 +2,18 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "board.h" // board-specific pin and bus configuration
+#include "drivers/leds/leds.h"
 
 // task run/exit functions for each task
-#include "tasks/led_task.h" 
+#include "tasks/led_task.h"
 #include "tasks/accelerometer_task.h"
 #include "tasks/audio_task.h"
 #include "tasks/idle_task.h"
 
 
-static void (*const task_run[])()  = { run_idle_task, run_led_task, run_accelerometer_task, run_audio_task };
-static void (*const task_exit[])() = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
+// Every task receives the one shared LedDriver by reference each frame.
+static void (*const task_run[])(LedDriver&)  = { run_idle_task, run_led_task, run_accelerometer_task, run_audio_task };
+static void (*const task_exit[])(LedDriver&) = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
 static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]); // array-length idiom; grows with the arrays
 
 int main()
@@ -22,13 +24,17 @@ int main()
     gpio_set_dir(SW1_PIN, GPIO_IN);
     gpio_set_pulls(SW1_PIN, false, false); // external pull-down present; no internal pulls needed
 
+    // The one LedDriver for the whole program. Constructing it loads the PIO
+    // program and starts the state machine, so it must happen exactly once.
+    LedDriver leds(BOARD_LED_COUNT);
+
     bool button_pressed = false;
     bool last_state     = false;
     int  current_task   = 0;
 
     for (;;) {
         // One cooperative frame of the current task, then back to polling.
-        task_run[current_task]();
+        task_run[current_task](leds);
 
         // Poll SW1 (GPIO15); a rising edge begins press handling.
         bool state = gpio_get(SW1_PIN);
@@ -53,7 +59,7 @@ int main()
 
         // Confirmed press: clean up the task and advance.
         if (button_pressed) {
-            task_exit[current_task]();
+            task_exit[current_task](leds);
             current_task = (current_task + 1) % NUM_TASKS;
             button_pressed = false;
         }

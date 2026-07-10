@@ -54,12 +54,18 @@ flat `for(;;)` loop in `main()` repeatedly does three things:
 
 ### The task contract
 
-Every task is a pair of plain functions with no arguments and no return value:
+Every task is a pair of plain functions that take the shared LED driver by
+reference and return nothing:
 
 ```cpp
-void run_<name>_task();   // called once per loop iteration ("one frame")
-void exit_<name>_task();  // called once when leaving the task
+void run_<name>_task(LedDriver &leds);   // called once per loop iteration ("one frame")
+void exit_<name>_task(LedDriver &leds);  // called once when leaving the task
 ```
+
+`main()` constructs a **single `LedDriver`** once, before the task loop, and
+passes it into every `run_*`/`exit_*` call. Task files do not construct their
+own driver instance (the old per-file `get_leds()` lazy-singleton pattern is
+gone), so the PIO program is loaded exactly once for the whole program.
 
 `run_*` must be **non-blocking** — it does a small slice of work and returns
 immediately so the main loop can keep polling the button. State that must
@@ -72,13 +78,14 @@ task's one-time-init flag).
 Tasks are stored in two parallel arrays of **function pointers** in `main.cpp`:
 
 ```cpp
-static void (*const task_run[])()  = { run_idle_task, run_led_task,
-                                       run_accelerometer_task, run_audio_task };
-static void (*const task_exit[])() = { exit_idle_task, exit_led_task,
-                                       exit_accelerometer_task, exit_audio_task };
+static void (*const task_run[])(LedDriver&)  = { run_idle_task, run_led_task,
+                                                 run_accelerometer_task, run_audio_task };
+static void (*const task_exit[])(LedDriver&) = { exit_idle_task, exit_led_task,
+                                                 exit_accelerometer_task, exit_audio_task };
 ```
 
-`current_task` indexes both arrays. Advancing wraps with modulo
+`current_task` indexes both arrays; each call passes the shared driver
+(`task_run[current_task](leds)`). Advancing wraps with modulo
 (`(current_task + 1) % NUM_TASKS`). The task order is the array order:
 **idle → led → accelerometer → audio → idle → …**
 
@@ -143,7 +150,7 @@ and detect button presses, and switch tasks.
   (`gpio_set_pulls(SW1_PIN, false, false)`) because an external pull-down is
   fitted.
 - **Per iteration:**
-  1. `task_run[current_task]()` runs one frame.
+  1. `task_run[current_task](leds)` runs one frame.
   2. SW1 is polled. A **rising edge** (`state && !last_state`) starts press
      handling.
   3. The code waits `20 ms` (≈ 2 RC time constants) and re-reads the pin to
@@ -151,8 +158,8 @@ and detect button presses, and switch tasks.
      sub-millisecond noise; this confirms the level has settled.
   4. It then **blocks until release** (polling every 5 ms) so one physical
      press maps to exactly one logical press.
-  5. On a confirmed press, `task_exit[current_task]()` runs and `current_task`
-     advances modulo `NUM_TASKS`.
+  5. On a confirmed press, `task_exit[current_task](leds)` runs and
+     `current_task` advances modulo `NUM_TASKS`.
 - **Loop pacing:** `sleep_ms(5)` at the end sets the polling interval, well
   above the RC settling time.
 
@@ -356,7 +363,9 @@ off, and resets the init flag.
 ## Adding a new task
 
 1. Create `src/tasks/<name>_task.cpp` and `.h` with
-   `run_<name>_task()` / `exit_<name>_task()`.
+   `run_<name>_task(LedDriver &leds)` / `exit_<name>_task(LedDriver &leds)`
+   (forward-declare `class LedDriver;` in the header rather than including
+   `leds.h`).
 2. In `main.cpp`, `#include "tasks/<name>_task.h"` and append the function
    names to `task_run[]` and `task_exit[]` **in the same order**.
 3. Add the `.cpp` to `target_sources(labs …)` in `CMakeLists.txt`.

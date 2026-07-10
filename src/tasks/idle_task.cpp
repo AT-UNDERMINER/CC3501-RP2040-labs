@@ -12,16 +12,8 @@ static constexpr float PHASE_START = 4.71238898f; // 3π/2: sin = -1, brightness
 static constexpr float BLUE_HUE    = 240.0f;
 static constexpr float PEAK_VAL    = 0.07f;       // peak brightness — deliberately dim
 
-// Lazily-constructed driver instance shared by run_idle_task() and exit_idle_task().
-static LedDriver& get_leds()
+void run_idle_task(LedDriver &leds)
 {
-    static LedDriver leds(BOARD_LED_COUNT);
-    return leds;
-}
-
-void run_idle_task()
-{
-    LedDriver &leds = get_leds();
     static bool  initialized  = false;
     static float breath_phase = PHASE_START;
 
@@ -40,9 +32,8 @@ void run_idle_task()
     breath_phase = fmodf(breath_phase + BREATH_STEP, TWO_PI); // advance, wrap at 2π
 }
 
-void exit_idle_task()
+void exit_idle_task(LedDriver &leds)
 {
-    LedDriver &leds = get_leds();
     leds.off();
     leds.show();
 }
