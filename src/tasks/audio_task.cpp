@@ -4,13 +4,10 @@
 #include "board.h"
 
 #include <stdint.h>
-#include <math.h>          // cosf, M_PI — used only in one-time window pre-compute
+#include <math.h>          // cosf — used only in one-time window pre-compute
+#include <numbers>         // C++20 std::numbers::pi — replaces a hand-typed literal
 #include "arm_math.h"      // CMSIS-DSP: q15_t, arm_rfft_q15, arm_cmplx_mag_squared_q15
 #include "hardware/adc.h"  // adc_run / FIFO drain in exit_audio_task
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 // --- Constants ---------------------------------------------------------------
 static constexpr int FFT_SIZE    = 1024;
@@ -50,7 +47,7 @@ void run_audio_task(LedDriver &leds)
         // Pre-compute the Hanning window. Float is fine here: runs once at init,
         // never in the per-frame processing loop.
         for (int n = 0; n < FFT_SIZE; n++) {
-            hanning[n] = (int16_t)(0.5f * (1.0f - cosf(2.0f * M_PI * n / (FFT_SIZE - 1))) * 32767);
+            hanning[n] = (int16_t)(0.5f * (1.0f - cosf(2.0 * std::numbers::pi * n / (FFT_SIZE - 1))) * 32767);
         }
 
         s_initialised = true;

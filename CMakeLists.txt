@@ -32,7 +32,7 @@ if(CrossCompiling)
     # Yes, build for the RP2040
 
     set(CMAKE_C_STANDARD 11)
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 20)
 
     # Specify an increased oscillator startup delay to work around a potential hardware issue where the 
     # clock is slow to boot.

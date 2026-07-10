@@ -120,7 +120,7 @@ compiler kit (selectable from the VS Code status bar):
 
 Key points of the firmware build:
 
-- C standard 11, C++ standard 17.
+- C standard 11, C++ standard 20.
 - Pulls in the Pico SDK (`pico_sdk_import.cmake`, `pico_sdk_init()`).
 - Configures **CMSIS-DSP** with only the needed components enabled
   (`TRANSFORM`, `BASICMATH`, `COMPLEXMATH`) and the hard-coded

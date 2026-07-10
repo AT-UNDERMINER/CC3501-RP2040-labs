@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <numbers> // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literal
 
 static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in via lis3dh.h
 
@@ -36,7 +37,6 @@ void run_accelerometer_task(LedDriver &leds)
     // all-green means the board is flat.
     const float LEVEL_THRESHOLD = 0.05f; // |X| and |Y| under this counts as level
     const float MAG_RED         = 0.50f; // tilt magnitude at/above this -> red bubble
-    const float PI_F            = 3.14159265f;
 
     float magnitude = sqrtf(gx * gx + gy * gy);
 
@@ -65,7 +65,7 @@ void run_accelerometer_task(LedDriver &leds)
             // -pi/2 (left) -> right side; back tilts are handled above.
             float angle = atan2f(gx, gy);
             // 5.5 = back-centre index; 8/π ≈ 4 LED steps per 90° of tilt.
-            int idx = (int)lroundf(5.5f + angle * (8.0f / PI_F));
+            int idx = (int)lroundf(5.5f + angle * (8.0f / std::numbers::pi_v<float>));
             if (idx < 0)  idx = 0;
             if (idx > 11) idx = 11;
             leds.set_one_hsv(idx, hue, 1.0f, val);
