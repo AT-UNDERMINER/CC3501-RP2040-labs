@@ -1,5 +1,6 @@
 #include "leds.h"
 #include <stdio.h>
+#include <algorithm> // std::clamp, std::min, std::max
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "WS2812.pio.h"
@@ -36,11 +37,10 @@ void LedDriver::write_leds() const
 void LedDriver::hsv_to_rgb(float h, float s, float v,
                             uint8_t *r, uint8_t *g, uint8_t *b)
 {
-    // Clamp inputs to valid ranges
-    if (h <   0.0f) h =   0.0f;
-    if (h >= 360.0f) h = 359.9f;
-    if (s <   0.0f) s = 0.0f;  if (s > 1.0f) s = 1.0f;
-    if (v <   0.0f) v = 0.0f;  if (v > 1.0f) v = 1.0f;
+    // Clamp inputs to valid ranges (hue tops out at 359.9 so the sector index stays 0-5)
+    h = std::clamp(h, 0.0f, 359.9f);
+    s = std::clamp(s, 0.0f, 1.0f);
+    v = std::clamp(v, 0.0f, 1.0f);
 
     if (s == 0.0f) {
         // No saturation = achromatic; brightness alone sets the level
@@ -112,10 +112,10 @@ void LedDriver::set_one(int index, uint8_t r, uint8_t g, uint8_t b)
 
 void LedDriver::set_range(int start, int count, uint8_t r, uint8_t g, uint8_t b)
 {
-    // Clamp so the range never strays outside the vector
-    if (start < 0) start = 0;
-    int end = start + count;
-    if (end > (int)colours_.size()) end = (int)colours_.size();
+    // Clamp so the range never strays outside the vector. Each bound is
+    // one-sided, so min/max fit better than a two-sided std::clamp.
+    start   = std::max(start, 0);
+    int end = std::min(start + count, (int)colours_.size());
 
     for (int i = start; i < end; i++) { colours_[i] = {r, g, b}; }
     dirty_ = true;

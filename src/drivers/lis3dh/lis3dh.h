@@ -43,7 +43,8 @@ bool lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr);
 bool lis3dh_power_down(i2c_inst_t *i2c);
 
 // Read one sample from all three axes as 12-bit signed values (right-justified).
-void lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, int16_t *y, int16_t *z);
+// Returns false (outputs untouched) if the I2C transaction fails.
+bool lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, int16_t *y, int16_t *z);
 
 // Convert a raw 12-bit reading to g-force (1 mg/digit in HR mode at +-2g).
 float lis3dh_to_g(int16_t raw);

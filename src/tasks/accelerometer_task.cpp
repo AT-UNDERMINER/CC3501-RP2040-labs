@@ -5,7 +5,8 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <numbers> // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literal
+#include <numbers>   // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literal
+#include <algorithm> // std::clamp
 
 static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in via lis3dh.h
 
@@ -15,17 +16,48 @@ static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in 
 // Tracks whether the LIS3DH has been brought up for the current task session.
 static bool s_initialised = false;
 
+// One-shot guards so failure messages print once per session, not every 5 ms
+// frame while the condition persists. Reset on exit alongside s_initialised.
+static bool s_init_error_logged = false;
+static bool s_read_error_logged = false;
+
+// Frames to wait between failed init attempts (~250 ms at main's 5 ms loop) so
+// the driver's own WHO_AM_I error print doesn't repeat at full frame rate.
+static constexpr int INIT_RETRY_FRAMES = 50;
+static int s_init_retry_countdown = 0; // 0 = attempt init this frame
+
 void run_accelerometer_task(LedDriver &leds)
 {
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
+        // Rate-limit failed attempts: burn down the countdown between tries so
+        // a missing sensor is probed every ~250 ms, not every frame.
+        if (s_init_retry_countdown > 0) {
+            s_init_retry_countdown--;
+            return;
+        }
         leds.set_busy_wait(false);
-        lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ);
+        if (!lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ)) {
+            // Flag stays false so a later frame retries instead of streaming
+            // garbage from an unconfigured device.
+            if (!s_init_error_logged) {
+                printf("Accelerometer task: LIS3DH init failed, will keep retrying\n");
+                s_init_error_logged = true;
+            }
+            s_init_retry_countdown = INIT_RETRY_FRAMES;
+            return;
+        }
         s_initialised = true;
     }
 
     int16_t rx, ry, rz;
-    lis3dh_read_raw(ACCEL_I2C, &rx, &ry, &rz);
+    if (!lis3dh_read_raw(ACCEL_I2C, &rx, &ry, &rz)) {
+        if (!s_read_error_logged) {
+            printf("Accelerometer task: LIS3DH read failed, skipping frames\n");
+            s_read_error_logged = true;
+        }
+        return;
+    }
 
     float gx = lis3dh_to_g(rx);
     float gy = lis3dh_to_g(ry);
@@ -66,8 +98,7 @@ void run_accelerometer_task(LedDriver &leds)
             float angle = atan2f(gx, gy);
             // 5.5 = back-centre index; 8/π ≈ 4 LED steps per 90° of tilt.
             int idx = (int)lroundf(5.5f + angle * (8.0f / std::numbers::pi_v<float>));
-            if (idx < 0)  idx = 0;
-            if (idx > 11) idx = 11;
+            idx = std::clamp(idx, 0, 11);
             leds.set_one_hsv(idx, hue, 1.0f, val);
         }
     }
@@ -110,12 +141,19 @@ void run_accelerometer_task(LedDriver &leds)
 void exit_accelerometer_task(LedDriver &leds)
 {
     // Stop sampling — the driver handles the power-down register write.
-    lis3dh_power_down(ACCEL_I2C);
+    if (!lis3dh_power_down(ACCEL_I2C)) {
+        printf("Accelerometer task: LIS3DH power-down failed\n");
+    }
 
     // Turn off every LED.
     leds.off();
     leds.show();
 
-    // Force re-initialisation next time the task is selected.
-    s_initialised = false;
+    // Force re-initialisation next time the task is selected, re-arm the
+    // one-shot error messages, and clear the retry countdown so re-entry
+    // attempts init immediately rather than waiting out a stale counter.
+    s_initialised          = false;
+    s_init_error_logged    = false;
+    s_read_error_logged    = false;
+    s_init_retry_countdown = 0;
 }

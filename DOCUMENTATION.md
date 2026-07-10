@@ -233,7 +233,7 @@ as their first argument.
 bool  lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr);          // bring up + verify + configure
 bool  lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr);             // change ODR at runtime
 bool  lis3dh_power_down(i2c_inst_t *i2c);                            // ODR = 0000 → power-down mode
-void  lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, *y, *z);          // one 3-axis sample (12-bit signed)
+bool  lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, *y, *z);          // one 3-axis sample (12-bit signed); outputs untouched on failure
 float lis3dh_to_g(int16_t raw);                                      // raw → g
 ```
 
@@ -253,7 +253,12 @@ float lis3dh_to_g(int16_t raw);                                      // raw → 
 **Key behaviours:**
 
 - **WHO_AM_I check:** reads register `0x0F`, expects `0x33`; aborts init and
-  returns `false` if it does not match — never configures an unknown device.
+  returns `false` if the read fails or the ID does not match — never configures
+  an unknown device.
+- **Checked transactions:** every register read/write verifies the I2C byte
+  count, so `lis3dh_init` / `lis3dh_set_odr` / `lis3dh_power_down` return
+  `false` on any bus failure and `lis3dh_read_raw` returns `false` with its
+  outputs untouched.
 - **Multi-byte burst read:** the sub-address is OR-ed with `0x80`
   (`AUTO_INCREMENT`) so the LIS3DH auto-increments through `OUT_X_L..OUT_Z_H`
   in a single transaction. **This flag is mandatory on the LIS3DH** — without
@@ -320,14 +325,19 @@ A **spirit/bubble level**. Reads the LIS3DH each frame, prints X/Y/Z in g over
 serial, and shows tilt on the LED ring.
 
 - One-time `lis3dh_init` at `lis3dh_odr_t::ODR_100HZ` on first run (flag reset
-  on exit).
+  on exit). If init fails (e.g. sensor missing), the task skips the frame and
+  retries roughly every 250 ms (`INIT_RETRY_FRAMES` = 50 frames of the 5 ms
+  loop) rather than every frame; the failure is printed once per session.
+- Failed reads skip the frame (LEDs keep their last state) and are likewise
+  logged once per session.
 - **Level** (|X| and |Y| < `LEVEL_THRESHOLD = 0.05 g`): all LEDs steady green.
 - **Tilted:** the tilt direction is mapped to a single "bubble" LED around the
   U-shape using `atan2f(gx, gy)`; bubble colour is orange below `MAG_RED` and
   red at/above it, so colour encodes tilt magnitude. Special cases handle the
   gap at the front of the U.
-- `exit` powers the LIS3DH down via `lis3dh_power_down()`, turns LEDs off, and
-  resets the init flag.
+- `exit` powers the LIS3DH down via `lis3dh_power_down()` (logging if that
+  fails), turns LEDs off, and resets the init flag, the one-shot message
+  guards, and the retry countdown so re-entry starts clean.
 
 > Two earlier lighting approaches are kept commented out in the source as
 > alternatives (threshold groups, and brightness-proportional tilt).
