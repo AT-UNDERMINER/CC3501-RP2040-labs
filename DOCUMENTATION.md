@@ -49,8 +49,8 @@ The firmware is a **cooperative single-loop scheduler**. There is no RTOS; a
 flat `for(;;)` loop in `main()` repeatedly does three things:
 
 1. Run one *frame* of the current task.
-2. Poll SW1 for a press.
-3. On a press, exit the current task and advance to the next.
+2. Check whether the SW1 interrupt has flagged a press.
+3. On a flagged press, exit the current task and advance to the next.
 
 ### The task contract
 
@@ -68,7 +68,7 @@ own driver instance (the old per-file `get_leds()` lazy-singleton pattern is
 gone), so the PIO program is loaded exactly once for the whole program.
 
 `run_*` must be **non-blocking** — it does a small slice of work and returns
-immediately so the main loop can keep polling the button. State that must
+immediately so the main loop can act on a flagged button press promptly. State that must
 survive between frames is held in `static` local variables inside the task.
 `exit_*` performs cleanup (turn LEDs off, power down a peripheral, reset the
 task's one-time-init flag).
@@ -142,31 +142,36 @@ Key points of the firmware build:
 
 ### `main.cpp` — task dispatch and button
 
-Responsibilities: initialise stdio and SW1, run the scheduler loop, debounce
-and detect button presses, and switch tasks.
+Responsibilities: initialise stdio and SW1, register the button interrupt, run
+the scheduler loop, and switch tasks when a press has been flagged.
 
 - **Startup:** `stdio_init_all()`, then `gpio_init(SW1_PIN)`,
   direction = input, internal pulls disabled
   (`gpio_set_pulls(SW1_PIN, false, false)`) because an external pull-down is
-  fitted.
+  fitted. A **rising-edge interrupt** is then registered on the pin
+  (`gpio_set_irq_enabled_with_callback(SW1_PIN, GPIO_IRQ_EDGE_RISE, …)`) —
+  idle is LOW, a press pulls the line HIGH.
+- **Press capture:** the ISR (`gpio_callback`) does exactly one thing: set the
+  file-scope `volatile bool s_button_pressed`. `volatile` forces main() to
+  re-read the flag on every pass instead of caching it.
 - **Per iteration:**
   1. `task_run[current_task](leds)` runs one frame.
-  2. SW1 is polled. A **rising edge** (`state && !last_state`) starts press
-     handling.
-  3. The code waits `20 ms` (≈ 2 RC time constants) and re-reads the pin to
-     confirm a real press, not a glitch. The RC filter has already removed
-     sub-millisecond noise; this confirms the level has settled.
-  4. It then **blocks until release** (polling every `LOOP_PERIOD_MS`) so one
-     physical press maps to exactly one logical press.
-  5. On a confirmed press, `task_exit[current_task](leds)` runs and
-     `current_task` advances modulo `NUM_TASKS`.
-- **Loop pacing:** `sleep_ms(LOOP_PERIOD_MS)` (5 ms) at the end sets the
-  polling interval, well above the RC settling time. idle_task's breathing
+  2. If `s_button_pressed` is set, main() clears it, prints the press,
+     runs `task_exit[current_task](leds)`, and advances `current_task`
+     modulo `NUM_TASKS`. One rising edge = one switch, even if the button
+     is held down.
+- **Loop pacing:** `sleep_ms(LOOP_PERIOD_MS)` (5 ms) at the end paces the task
+  frames — the button itself no longer needs polling. idle_task's breathing
   maths derives its steps-per-cycle from this period.
 
-**Design note — polling, not interrupts.** Because SW1 already has hardware RC
-debouncing and the loop is fast enough, polling is simpler and sufficient; an
-interrupt + handler would add complexity with no benefit here.
+**Design note — minimal ISR, work in main().** The ISR only sets a flag
+because the `task_exit` functions do blocking I2C/ADC/PIO work that is unsafe
+in interrupt context. Debounce is handled by the hardware RC filter
+(100 kΩ / 100 nF, τ = 10 ms) plus the GPIO input's Schmitt trigger, not in
+software. The genuine benefit of the interrupt is that a short press can no
+longer be missed — the edge is latched immediately, even mid-frame — while
+task-switch latency is largely unchanged, since the switch still waits for the
+current task frame to finish.
 
 ### `board.h` — board pin map
 

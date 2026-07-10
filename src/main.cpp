@@ -16,9 +16,22 @@ static void (*const task_run[])(LedDriver&)  = { run_idle_task, run_led_task, ru
 static void (*const task_exit[])(LedDriver&) = { exit_idle_task, exit_led_task, exit_accelerometer_task, exit_audio_task };
 static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]); // array-length idiom; grows with the arrays
 
-// Pacing for the scheduler loop and button polling. idle_task's breathing
-// maths derives its steps-per-cycle from this value — change one, check the other.
+// Pacing for the scheduler loop. idle_task's breathing maths derives its
+// steps-per-cycle from this value — change one, check the other.
 static constexpr int LOOP_PERIOD_MS = 5;
+
+// Set by the ISR, consumed in main(). volatile: written in interrupt context
+// and read by main(), so the compiler must re-read it every time instead of
+// optimising the check away. File-scope because both the ISR and main() need it.
+static volatile bool s_button_pressed = false;
+
+// GPIO interrupt callback for SW1. Deliberately minimal — the task_exit
+// functions do blocking I2C/ADC/PIO work that is unsafe in interrupt context,
+// so the ISR only sets a flag and main() does the real task-switch work.
+static void gpio_callback(uint gpio, uint32_t events)
+{
+    s_button_pressed = true;
+}
 
 int main()
 {
@@ -28,6 +41,11 @@ int main()
     gpio_set_dir(SW1_PIN, GPIO_IN);
     gpio_set_pulls(SW1_PIN, false, false); // external pull-down present; no internal pulls needed
 
+    // Rising edge = button press (external pull-down: idle LOW, press pulls HIGH).
+    // Debounce is the hardware RC filter (100 kΩ / 100 nF, τ = 10 ms) plus the
+    // GPIO input's Schmitt trigger, so no software debounce is needed here.
+    gpio_set_irq_enabled_with_callback(SW1_PIN, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+
     // The one LedDriver for the whole program. Constructing it loads the PIO
     // program and starts the state machine, so it must happen exactly once.
     LedDriver leds(BOARD_LED_COUNT);
@@ -35,43 +53,22 @@ int main()
     // show() never needs to busy-wait for it — set once here for every task.
     leds.set_busy_wait(false);
 
-    bool button_pressed = false;
-    bool last_state     = false;
-    int  current_task   = 0;
+    int current_task = 0;
 
     for (;;) {
-        // One cooperative frame of the current task, then back to polling.
+        // One cooperative frame of the current task.
         task_run[current_task](leds);
 
-        // Poll SW1 (GPIO15); a rising edge begins press handling.
-        bool state = gpio_get(SW1_PIN);
-
-        if (state && !last_state) {
-            // Confirm it's real: wait ~2τ and re-read. The 100 kΩ / 100 nF filter
-            // (τ = 10 ms) already removes sub-millisecond glitches, so 20 ms settles it.
-            sleep_ms(20);
-            if (gpio_get(SW1_PIN)) {
-                button_pressed = true;
-                printf("Button pressed\n");
-
-                // Wait for release so one physical press is one logical press.
-                while (gpio_get(SW1_PIN)) {
-                    sleep_ms(LOOP_PERIOD_MS);
-                }
-            }
-            last_state = false; // pin is LOW again after the release wait
-        } else {
-            last_state = state;
-        }
-
-        // Confirmed press: clean up the task and advance.
-        if (button_pressed) {
+        // Consume a press flagged by the ISR: clean up the task and advance.
+        // One rising edge = one switch, even if the button is held down.
+        if (s_button_pressed) {
+            s_button_pressed = false;
+            printf("Button pressed\n"); // safe here in main(), not in the ISR
             task_exit[current_task](leds);
             current_task = (current_task + 1) % NUM_TASKS;
-            button_pressed = false;
         }
 
-        sleep_ms(LOOP_PERIOD_MS); // poll interval — comfortably above the RC settling time
+        sleep_ms(LOOP_PERIOD_MS); // frame pacing — the button no longer needs polling
     }
 
     return 0;
