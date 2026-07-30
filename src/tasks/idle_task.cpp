@@ -1,8 +1,7 @@
 #include "idle_task.h"
 #include "drivers/leds/leds.h"
-#include "board.h"
 #include <math.h>
-#include <numbers> // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literals
+#include <numbers> // C++20 std::numbers::pi_v<float> — exact pi, no hand-typed literals
 
 // 1 s rise (off → peak) + 1 s fall (peak → off) = 2 s full cycle.
 // COUPLED to main.cpp's LOOP_PERIOD_MS: one frame runs per loop pass, so

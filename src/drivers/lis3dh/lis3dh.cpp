@@ -5,11 +5,10 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
-// --- Pin / bus configuration -------------------------------------------------
 // Pins live in board.h (wiring); the baud rate is a bus fact, so it stays here.
 static constexpr uint  LIS3DH_BAUD = 400000; // 400 kHz fast mode
 
-// --- Register map (subset used here) -----------------------------------------
+// Registers used by this driver.
 static constexpr uint8_t REG_WHO_AM_I  = 0x0F;
 static constexpr uint8_t REG_CTRL_REG1  = 0x20;
 static constexpr uint8_t REG_CTRL_REG4  = 0x23;

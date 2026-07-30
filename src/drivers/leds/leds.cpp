@@ -6,13 +6,13 @@
 #include "WS2812.pio.h"
 #include "board.h"
 
-#define BOARD_LED_FREQ     800000   // WS2812 data-line frequency in Hz
+static constexpr uint32_t BOARD_LED_FREQ = 800000; // WS2812 data-line frequency in Hz
 
 // Minimum idle time (µs) required between WS2812 frames for the reset pulse.
 // 280 µs is the spec minimum; 300 µs adds a small margin.
 static constexpr uint32_t WS2812_RESET_US = 300;
 
-// --- Private methods 
+// --- Private methods
 
 // Clocks the full staging buffer out over PIO.
 // WS2812 LEDs latch all values simultaneously when the data line goes idle,
@@ -68,7 +68,7 @@ void LedDriver::hsv_to_rgb(float h, float s, float v,
     }
 }
 
-// --- Constructor 
+// --- Constructor
 
 // The member-initialiser list runs before the body:
 //   colours_(num_leds) — value-initialises each Colour to {0,0,0} (all LEDs off)
@@ -80,7 +80,7 @@ LedDriver::LedDriver(int num_leds)
     ws2812_program_init(pio0, 0, offset, BOARD_LED_PIN, BOARD_LED_FREQ, BOARD_LED_IS_RGBW);
 }
 
-// --- LED count 
+// --- LED count
 
 void LedDriver::set_count(int new_count)
 {
@@ -95,7 +95,7 @@ int LedDriver::get_count() const
     return (int)colours_.size();
 }
 
-// --- RGB staging 
+// --- RGB staging
 
 void LedDriver::set_all(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -137,7 +137,7 @@ void LedDriver::set_many_hsv(std::initializer_list<uint8_t> indices,
     for (uint8_t index : indices) { set_one_hsv(index, h, s, v); }
 }
 
-// --- HSV staging 
+// --- HSV staging
 
 void LedDriver::set_one_hsv(int index, float hue, float sat, float val)
 {
@@ -161,7 +161,7 @@ void LedDriver::set_range_hsv(int start, int count, float hue, float sat, float 
     set_range(start, count, r, g, b);
 }
 
-// --- Query 
+// --- Query
 
 LedDriver::Colour LedDriver::get_one(int index) const
 {
@@ -184,7 +184,7 @@ void LedDriver::print_status() const
     }
 }
 
-// --- Control 
+// --- Control
 
 void LedDriver::off()
 {

@@ -19,12 +19,12 @@ public:
     LedDriver(const LedDriver&)            = delete;
     LedDriver& operator=(const LedDriver&) = delete;
 
-    // --- LED count 
+    // --- LED count
 
     void set_count(int num_leds); // Resize at runtime; existing values are preserved, new LEDs start off
     int  get_count() const;       // Return the current number of LEDs
 
-    // --- RGB staging 
+    // --- RGB staging
     // None of these methods send data to the hardware.
     // Call show() to commit all staged changes at once.
 
@@ -36,7 +36,7 @@ public:
     void set_many_hsv(std::initializer_list<uint8_t> indices,
                       float h, float s, float v);                            // Stage an arbitrary set of LEDs (HSV)
 
-    // --- HSV staging 
+    // --- HSV staging
     // HSV is often easier for animations than RGB:
     //   hue: 0-360  position on the colour wheel (0=red, 120=green, 240=blue)
     //   sat: 0-1    vividness (0=grey, 1=pure colour)
@@ -46,16 +46,15 @@ public:
     void set_all_hsv  (float hue, float sat, float val);
     void set_range_hsv(int start, int count, float hue, float sat, float val);
 
-    // --- Query 
+    // --- Query
 
     Colour get_one    (int index) const; // Return the staged colour of one LED
-    // True if any set_*() call has been made since the last show().
-    // Use this to skip an unnecessary show() when nothing has changed,
-    // e.g. if (leds.has_pending_changes()) leds.show();
+    // True if a set_*() call has been made since the last show(). Lets a caller
+    // skip an unnecessary show() when nothing has changed.
     bool   has_pending_changes() const;
     void   print_status()         const; // Print every LED's staged colour and the dirty flag to stdout
 
-    // --- Control 
+    // --- Control
 
     void off();   // Stage all LEDs off (equivalent to set_all(0,0,0))
     void show();  // Send all staged changes to the hardware and clear the dirty flag

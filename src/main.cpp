@@ -20,9 +20,8 @@ static constexpr int NUM_TASKS = sizeof(task_run) / sizeof(task_run[0]); // arra
 // steps-per-cycle from this value — change one, check the other.
 static constexpr int LOOP_PERIOD_MS = 5;
 
-// Set by the ISR, consumed in main(). volatile: written in interrupt context
-// and read by main(), so the compiler must re-read it every time instead of
-// optimising the check away. File-scope because both the ISR and main() need it.
+// Set by the ISR, cleared in main(). volatile stops the compiler caching the
+// value, since it changes outside the normal flow of main().
 static volatile bool s_button_pressed = false;
 
 // GPIO interrupt callback for SW1. Deliberately minimal — the task_exit

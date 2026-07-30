@@ -15,10 +15,10 @@
 static constexpr uint8_t LIS3DH_ADDR = 0x19;
 
 // Output data rate values for CTRL_REG1 ODR[3:0], pre-shifted into the upper
-// nibble (datasheet Table 25). POWERDOWN is ODR = 0000 — the chip's power-down
-// state, not a sample rate.
-// enum class: scoped enum — values need the lis3dh_odr_t:: prefix and won't
-// silently convert to int, so a raw number can't be passed by accident.
+// nibble (datasheet Table 25). POWERDOWN is ODR = 0000, the chip's power-down
+// state rather than a sample rate.
+// enum class is a scoped enum: values need the lis3dh_odr_t:: prefix and won't
+// convert to int, so a raw number can't be passed by mistake.
 enum class lis3dh_odr_t : uint8_t {
     POWERDOWN = 0x00,
     ODR_1HZ   = 0x10,
