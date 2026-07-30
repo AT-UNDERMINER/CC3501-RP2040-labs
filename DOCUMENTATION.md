@@ -314,7 +314,8 @@ Default startup task. A slow **blue "breathing"** animation across all 12 LEDs.
 
 ### `tasks/led_task`
 
-A cycling **demonstration** of the LED driver API. Six steps, each held for
+A cycling **demonstration** of the LED driver API — every public method is
+exercised somewhere in the cycle. `NUM_STEPS = 7` steps, each held for
 `FRAMES_PER_STEP = 100` frames, then it loops:
 
 | Step | Demonstrates |
@@ -324,7 +325,11 @@ A cycling **demonstration** of the LED driver API. Six steps, each held for
 | 2 | two `set_range` blocks |
 | 3 | `set_many` on even LEDs (magenta) |
 | 4 | `set_many_hsv` on odd LEDs (cyan) |
-| 5 | `print_status`, a log line, then off |
+| 5 | `set_range_hsv`, then `has_pending_changes` and `get_one` before/after `show` |
+| 6 | `set_count` shrinks the chain to half, lights it, then restores the count |
+
+Step 6 restores the original count before it returns, since the driver is
+shared with the other tasks.
 
 `exit` turns all LEDs off.
 
@@ -340,42 +345,66 @@ serial, and shows tilt on the LED ring.
 - Failed reads skip the frame (LEDs keep their last state) and are likewise
   logged once per session.
 - **Level** (|X| and |Y| < `LEVEL_THRESHOLD = 0.05 g`): all LEDs steady green.
-- **Tilted:** the tilt direction is mapped to a single "bubble" LED around the
-  U-shape using `atan2f(gx, gy)`; bubble colour is orange below `MAG_RED` and
-  red at/above it, so colour encodes tilt magnitude. Special cases handle the
-  gap at the front of the U.
+- **Tilted:** `bubble_led(gx, gy)` picks the LED that represents the lean.
+  Most directions come from `atan2f(gx, gy)` mapped around the ring; leaning
+  straight back returns `-1`, because the U's front gap means the two end LEDs
+  share the job. Bubble colour is orange below `MAG_RED` and red at/above it,
+  so colour encodes tilt magnitude.
 - `exit` powers the LIS3DH down via `lis3dh_power_down()` (logging if that
   fails), turns LEDs off, and resets the init flag, the one-shot message
   guards, and the retry countdown so re-entry starts clean.
-
-> Two earlier lighting approaches are kept commented out in the source as
-> alternatives (threshold groups, and brightness-proportional tilt).
 
 ### `tasks/audio_task`
 
 A **real-time spectrum analyser**: 12 LEDs show energy in 12 log-spaced
 frequency bands.
 
+The whole signal path is **fixed point** — no floating point is used anywhere
+in this task, as required by the lab's design parameters.
+
 Pipeline per frame:
 
 1. Capture `FFT_SIZE = 1024` samples (`microphone_read`).
-2. Compute the **DC bias** (block mean) and subtract it from each sample.
-3. **Left-shift `<< 5`** to push the 12-bit data up into the Q15 range
-   (maximise precision).
-4. Apply a pre-computed **Hanning window** in Q15 (reduces spectral leakage).
+2. Compute the **DC bias** (block mean) and subtract it from each sample. The
+   bias is printed once per session as a sanity check — the amplifier centres
+   the signal, so it should read close to 2048 on the 12-bit ADC.
+3. **Left-shift by `INPUT_SHIFT` (7)** to push the 12-bit data as far up the
+   Q15 range as it will go — fixed point wastes precision on small numbers.
+   `__SSAT` saturates the result, so a swing past `INPUT_CLIP_LEVEL` clips
+   instead of wrapping round and flipping sign.
+4. Apply the **Hanning window** in Q15 (reduces spectral leakage): a
+   `Q15 * Q15 >> 15` element-wise multiply.
 5. `arm_rfft_q15` — forward real FFT (CMSIS-DSP rescales internally; output is
-   **not** renormalised).
-6. `arm_cmplx_mag_squared_q15` — magnitude² per bin (only `FFT_SIZE/2` bins are
-   used; the upper half is the conjugate mirror and carries no new info).
-7. Sum each band between `bin_edges[]` and light its LED (red→green→blue across
-   the chain) if the band energy crosses `LEVEL_THRESHOLD`.
+   ~Q11.5 and is **not** renormalised).
+6. `arm_cmplx_mag_squared_q15` — magnitude² per bin, giving the energy spectral
+   density in ~Q3.13. Only `NUM_BINS = FFT_SIZE/2 + 1` bins (DC through
+   Nyquist) are computed; the rest of the output is the conjugate mirror and
+   carries no new information.
+7. Sum each band between `bin_edges[]` and light its LED (`band_colour()` gives
+   a red→green→blue ramp across the chain) if the band energy crosses
+   `LEVEL_THRESHOLD`.
 
-One-time init builds the Hanning window (float, runs once), starts the mic, and
-initialises the FFT instance. `exit` stops the ADC, drains the FIFO, turns LEDs
-off, and resets the init flag.
+The Hanning coefficients are a **hard-coded `static const q15_t` table** at the
+top of the file, generated with `int16(hann(1024, 'periodic') .* 2^15)`, so no
+floating-point maths is needed to build the window at run time. The lecture
+notes specify the **periodic** window; the lab sheet omits the argument and so
+gets Matlab's symmetric default. Periodic is the correct choice for repeated
+FFT analysis, so that is what is used.
 
-> `LEVEL_THRESHOLD` and the working buffers are tuned for hardware; the buffers
-> are at file scope to keep them off the small main stack.
+`fft_output` is `2 * FFT_SIZE` even though only `NUM_BINS` are read back:
+`arm_split_rfft_q15` in CMSIS-DSP v1.14.1 writes the conjugate mirror as well
+as the unique bins, so the smaller `FFT_SIZE + 2` buffer shown in the lecture
+notes would overrun on this version.
+
+One-time init starts the mic and initialises the FFT instance. `exit` stops the
+ADC, drains the FIFO, turns LEDs off, and resets the init flag.
+
+> **Tuning.** `AUDIO_DIAGNOSTICS` prints the peak sample swing (against the
+> clipping limit) and the strongest band roughly once a second, so
+> `INPUT_SHIFT` and `LEVEL_THRESHOLD` can be set from measurements. Raise
+> `INPUT_SHIFT` while the peak stays under `INPUT_CLIP_LEVEL`; each extra bit
+> quadruples the band energy. Set the flag to `false` once they are dialled in.
+> The working buffers sit at file scope to keep them off the small main stack.
 
 ---
 
@@ -400,3 +429,5 @@ No other changes are needed — `NUM_TASKS` is computed from the array size.
 - Drivers never reach into task logic and vice versa.
 - Board-specific constants live only in `board.h`.
 - LED writes are staged; nothing reaches the hardware until `show()`.
+- The audio path is fixed point throughout; `idle_task` and
+  `accelerometer_task` use floats freely, as their labs place no such limit.
