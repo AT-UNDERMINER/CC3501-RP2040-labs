@@ -5,46 +5,74 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <numbers>   // C++20 std::numbers::pi_v<float> — exact π, no hand-typed literal
+#include <numbers>   // C++20 std::numbers::pi_v<float> — exact pi, no hand-typed literal
 #include <algorithm> // std::clamp
 
 static i2c_inst_t *const ACCEL_I2C = ACCEL_I2C_INSTANCE; // i2c_inst_t comes in via lis3dh.h
 
-// A tilt of this many g on an axis is treated as "significantly tilted".
-// static constexpr float TILT_THRESHOLD = 0.1f;
+// Tilt thresholds in g.
+static constexpr float LEVEL_THRESHOLD = 0.05f; // |X| and |Y| under this counts as level
+static constexpr float MAG_RED         = 0.50f; // tilt this far or more turns the bubble red
+
+// Bubble geometry on the 12-LED U-shape. The gap in the U is at the front,
+// between LED 0 (front right) and LED 11 (front left).
+static constexpr float   BACK_CENTRE_INDEX = 5.5f; // straight back sits between LEDs 5 and 6
+static constexpr uint8_t FRONT_RIGHT_LED   = 0;
+static constexpr uint8_t FRONT_LEFT_LED    = BOARD_LED_COUNT - 1;
+
+static constexpr float GREEN_HUE  = 120.0f; // level
+static constexpr float ORANGE_HUE = 10.0f;  // slight tilt
+static constexpr float RED_HUE    = 0.0f;   // past MAG_RED
 
 // Tracks whether the LIS3DH has been brought up for the current task session.
 static bool s_initialised = false;
 
-// One-shot guards so failure messages print once per session, not every 5 ms
-// frame while the condition persists. Reset on exit alongside s_initialised.
+// One-shot guards so failure messages print once per session, not every frame
+// while the condition persists. Reset on exit alongside s_initialised.
 static bool s_init_error_logged = false;
 static bool s_read_error_logged = false;
 
 // Frames to wait between failed init attempts (~250 ms at main's 5 ms loop) so
-// the driver's own WHO_AM_I error print doesn't repeat at full frame rate.
+// a missing sensor doesn't flood the terminal with retry messages.
 static constexpr int INIT_RETRY_FRAMES = 50;
 static int s_init_retry_countdown = 0; // 0 = attempt init this frame
+
+// Pick the LED that represents the current tilt direction. Returns -1 when the
+// board leans straight back, where the U's front gap means two LEDs share the
+// job. Only called when the board is known to be tilted.
+static int bubble_led(float gx, float gy)
+{
+    bool leaning_back = gy < -LEVEL_THRESHOLD;
+
+    if (leaning_back && fabsf(gx) < LEVEL_THRESHOLD) return -1;              // straddles the gap
+    if (leaning_back && gx < -LEVEL_THRESHOLD)       return FRONT_RIGHT_LED;
+    if (leaning_back && gx >  LEVEL_THRESHOLD)       return FRONT_LEFT_LED;
+
+    // Otherwise map the tilt angle onto the ring. atan2 gives 0 rad for a
+    // forward lean, which belongs at the back centre; +pi/2 (right) swings the
+    // bubble round to the left side. 8/pi is about 4 LED steps per 90 degrees.
+    float angle = atan2f(gx, gy);
+    int   idx   = (int)lroundf(BACK_CENTRE_INDEX + angle * (8.0f / std::numbers::pi_v<float>));
+    return std::clamp(idx, 0, BOARD_LED_COUNT - 1);
+}
 
 void run_accelerometer_task(LedDriver &leds)
 {
     // One-time setup; exit resets the flag so re-entry re-initialises cleanly.
     if (!s_initialised) {
-        // Rate-limit failed attempts: burn down the countdown between tries so
-        // a missing sensor is probed every ~250 ms, not every frame.
+        // Rate-limit failed attempts so a missing sensor is probed every
+        // ~250 ms instead of every frame.
         if (s_init_retry_countdown > 0) {
             s_init_retry_countdown--;
             return;
         }
         if (!lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ)) {
-            // Flag stays false so a later frame retries instead of streaming
-            // garbage from an unconfigured device.
             if (!s_init_error_logged) {
                 printf("Accelerometer task: LIS3DH init failed, will keep retrying\n");
                 s_init_error_logged = true;
             }
             s_init_retry_countdown = INIT_RETRY_FRAMES;
-            return;
+            return; // flag stays false, so a later frame tries again
         }
         s_initialised = true;
     }
@@ -64,79 +92,24 @@ void run_accelerometer_task(LedDriver &leds)
 
     printf("Accel  X=%+.3f g  Y=%+.3f g  Z=%+.3f g\n", gx, gy, gz);
 
-    // Bubble level: a single LED marks the tilt direction around the U-shape;
-    // all-green means the board is flat.
-    const float LEVEL_THRESHOLD = 0.05f; // |X| and |Y| under this counts as level
-    const float MAG_RED         = 0.50f; // tilt magnitude at/above this -> red bubble
-    const float BACK_CENTRE_INDEX = 5.5f;                // bubble index facing straight back (between LEDs 5 and 6)
-    const int   MAX_LED_INDEX     = BOARD_LED_COUNT - 1; // clamp bound from board.h, not a magic 11
-
-    float magnitude = sqrtf(gx * gx + gy * gy);
-
+    // Spirit level: all green when flat, otherwise a single bubble LED shows
+    // which way the board is leaning.
     if (fabsf(gx) < LEVEL_THRESHOLD && fabsf(gy) < LEVEL_THRESHOLD) {
-        // Level — steady green across all 12 LEDs.
-        leds.set_all_hsv(120.0f, 1.0f, 0.8f);
+        leds.set_all_hsv(GREEN_HUE, 1.0f, 0.8f);
     } else {
-        // Tilted — bubble colour comes from how far it is tilted.
-        float hue = (magnitude >= MAG_RED) ? 0.0f : 10.0f; // red vs orange
-        float val = (magnitude >= MAG_RED) ? 1.0f : 1.0f;
+        float magnitude = sqrtf(gx * gx + gy * gy);
+        float hue = (magnitude >= MAG_RED) ? RED_HUE : ORANGE_HUE; // colour encodes how far it leans
 
         leds.off();
-
-        if (gy < -LEVEL_THRESHOLD && fabsf(gx) < LEVEL_THRESHOLD && magnitude > LEVEL_THRESHOLD) {
-            // Tilting straight back toward the front gap — light both front LEDs.
-            leds.set_many_hsv({0, 11}, hue, 1.0f, val);
-        } else if (gy < -LEVEL_THRESHOLD && gx < -LEVEL_THRESHOLD) {
-            // Back and left — front-right LED only.
-            leds.set_one_hsv(0, hue, 1.0f, val);
-        } else if (gy < -LEVEL_THRESHOLD && gx > LEVEL_THRESHOLD) {
-            // Back and right — front-left LED only.
-            leds.set_one_hsv(11, hue, 1.0f, val);
+        int led = bubble_led(gx, gy);
+        if (led < 0) {
+            leds.set_many_hsv({FRONT_RIGHT_LED, FRONT_LEFT_LED}, hue, 1.0f, 1.0f);
         } else {
-            // General case: map the tilt angle onto one LED around the U-shape.
-            // angle 0 (forward) -> back centre, +pi/2 (right) -> left side,
-            // -pi/2 (left) -> right side; back tilts are handled above.
-            float angle = atan2f(gx, gy);
-            // 8/π ≈ 4 LED steps per 90° of tilt.
-            int idx = (int)lroundf(BACK_CENTRE_INDEX + angle * (8.0f / std::numbers::pi_v<float>));
-            idx = std::clamp(idx, 0, MAX_LED_INDEX);
-            leds.set_one_hsv(idx, hue, 1.0f, val);
+            leds.set_one_hsv(led, hue, 1.0f, 1.0f);
         }
     }
 
     leds.show();
-
-    // // Stage all LEDs off, then light the group(s) for any axis past the threshold.
-    // leds.off();
-    // if (gx >  TILT_THRESHOLD) leds.set_range(GROUP_POS_X, GROUP_LEN, 0, 255, 0);
-    // if (gx < -TILT_THRESHOLD) leds.set_range(GROUP_NEG_X, GROUP_LEN, 0, 255, 0);
-    // if (gy >  TILT_THRESHOLD) leds.set_many({0, 11}, 0, 0, 255);
-    // if (gy < -TILT_THRESHOLD) leds.set_range(GROUP_NEG_Y, GROUP_LEN, 0, 0, 255);
-    // leds.show();
-
-    // Different lighting approach
-//     leds.off();
-//     if (gx > TILT_THRESHOLD) {
-//         int brightness = (int)(255.0f * (gx - TILT_THRESHOLD) / (1.0f - TILT_THRESHOLD));
-//         leds.set_range(GROUP_POS_X, GROUP_LEN, brightness, 0, 0);
-//     }
-//     if (gx < -TILT_THRESHOLD) {
-//         int brightness = (int)(255.0f * (-gx - TILT_THRESHOLD) / (1.0f - TILT_THRESHOLD));
-//         leds.set_range(GROUP_NEG_X, GROUP_LEN, brightness, 0, 0);
-//     }
-//     if (gy > TILT_THRESHOLD) {
-//         int brightness = (int)(255.0f * (gy - TILT_THRESHOLD) / (1.0f - TILT_THRESHOLD));
-//         leds.set_range(GROUP_POS_Y, GROUP_LEN, 0, 0, brightness);
-//     }
-//     if (gy < -TILT_THRESHOLD) {
-//         int brightness = (int)(255.0f * (-gy - TILT_THRESHOLD) / (1.0f - TILT_THRESHOLD));
-//         leds.set_range(GROUP_NEG_Y, GROUP_LEN, 0, 0, brightness);
-//     }
-//     if (gx < TILT_THRESHOLD && gx > -TILT_THRESHOLD && gy < TILT_THRESHOLD && gy > -TILT_THRESHOLD) {
-//         leds.set_all(0, 125, 0);
-//     }
-//     leds.show();
-
 }
 
 void exit_accelerometer_task(LedDriver &leds)
@@ -146,7 +119,6 @@ void exit_accelerometer_task(LedDriver &leds)
         printf("Accelerometer task: LIS3DH power-down failed\n");
     }
 
-    // Turn off every LED.
     leds.off();
     leds.show();
 
