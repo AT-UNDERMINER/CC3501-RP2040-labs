@@ -1,7 +1,8 @@
 #include "lis3dh.h"
 #include "board.h"
+#include "drivers/logging/logging.h"
 
-#include <stdio.h>
+#include <stdio.h> // snprintf, for the one message that carries values
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
@@ -24,15 +25,27 @@ static constexpr uint8_t AUTO_INCREMENT = 0x80; // OR into sub-address for multi
 static bool write_reg(i2c_inst_t *i2c, uint8_t reg, uint8_t value)
 {
     uint8_t buf[2] = { reg, value };
-    return i2c_write_blocking(i2c, LIS3DH_ADDR, buf, 2, false) == 2;
+    if (i2c_write_blocking(i2c, LIS3DH_ADDR, buf, 2, false) != 2) {
+        log(LogLevel::ERROR, "lis3dh: failed to write register.");
+        return false;
+    }
+    return true;
 }
 
-// Read a single register into *value. True only if both steps succeeded.
-static bool read_reg(i2c_inst_t *i2c, uint8_t reg, uint8_t *value)
+// Read `length` consecutive registers into `data`. Serves both single-register
+// reads and the 3-axis burst, so the transaction only exists in one place.
+static bool read_registers(i2c_inst_t *i2c, uint8_t reg, uint8_t *data, size_t length)
 {
-    // keep bus held for repeated start between the address write and the read
-    if (i2c_write_blocking(i2c, LIS3DH_ADDR, &reg, 1, true) != 1) return false;
-    return i2c_read_blocking(i2c, LIS3DH_ADDR, value, 1, false) == 1;
+    // Hold the bus for a repeated start between the address write and the read.
+    if (i2c_write_blocking(i2c, LIS3DH_ADDR, &reg, 1, true) != 1) {
+        log(LogLevel::ERROR, "lis3dh: failed to select register address.");
+        return false;
+    }
+    if (i2c_read_blocking(i2c, LIS3DH_ADDR, data, length, false) != (int)length) {
+        log(LogLevel::ERROR, "lis3dh: failed to read register data.");
+        return false;
+    }
+    return true;
 }
 
 bool lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr)
@@ -44,11 +57,17 @@ bool lis3dh_init(i2c_inst_t *i2c, lis3dh_odr_t start_odr)
     gpio_set_function(ACCEL_SCL_PIN, GPIO_FUNC_I2C);
 
     // Confirm we are talking to a LIS3DH before configuring anything.
-    // who stays 0x00 if the read itself failed, so the message still makes sense.
     uint8_t who = 0;
-    if (!read_reg(i2c, REG_WHO_AM_I, &who) || who != WHO_AM_I_VALUE) {
-        printf("LIS3DH init failed: WHO_AM_I returned 0x%02X, expected 0x%02X\n",
-               who, WHO_AM_I_VALUE);
+    if (!read_registers(i2c, REG_WHO_AM_I, &who, 1)) {
+        return false; // read_registers has already logged why
+    }
+    if (who != WHO_AM_I_VALUE) {
+        // Format the values in: knowing what came back separates a wrong device
+        // from a silent bus. log() only takes a plain string, hence snprintf.
+        char msg[64];
+        snprintf(msg, sizeof(msg), "lis3dh: WHO_AM_I read 0x%02X, expected 0x%02X",
+                 who, WHO_AM_I_VALUE);
+        log(LogLevel::ERROR, msg);
         return false;
     }
 
@@ -67,7 +86,7 @@ bool lis3dh_set_odr(i2c_inst_t *i2c, lis3dh_odr_t odr)
     // Read-modify-write: replace only ODR[3:0] (the upper nibble of CTRL_REG1),
     // keep LPen/Zen/Yen/Xen as they are.
     uint8_t current;
-    if (!read_reg(i2c, REG_CTRL_REG1, &current)) return false;
+    if (!read_registers(i2c, REG_CTRL_REG1, &current, 1)) return false;
     return write_reg(i2c, REG_CTRL_REG1, (uint8_t)((current & 0x0F) | (uint8_t)odr));
 }
 
@@ -79,12 +98,11 @@ bool lis3dh_power_down(i2c_inst_t *i2c)
 
 bool lis3dh_read_raw(i2c_inst_t *i2c, int16_t *x, int16_t *y, int16_t *z)
 {
-    // Auto-increment must be requested for a multi-byte burst read.
-    uint8_t reg = REG_OUT_X_L | AUTO_INCREMENT; // 0xA8
+    // Auto-increment must be requested for a multi-byte burst read (0xA8).
     uint8_t data[6] = { 0 };
-
-    if (i2c_write_blocking(i2c, LIS3DH_ADDR, &reg, 1, true) != 1) return false;
-    if (i2c_read_blocking(i2c, LIS3DH_ADDR, data, 6, false) != 6) return false;
+    if (!read_registers(i2c, REG_OUT_X_L | AUTO_INCREMENT, data, 6)) {
+        return false;
+    }
 
     // Data is left-justified in HR mode; combine then shift down to 12-bit signed.
     *x = (int16_t)((data[1] << 8) | data[0]) >> 4;
