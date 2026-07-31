@@ -1,6 +1,7 @@
 #include "accelerometer_task.h"
 #include "drivers/lis3dh/lis3dh.h"
 #include "drivers/leds/leds.h"
+#include "drivers/logging/logging.h"
 #include "board.h"
 
 #include <stdio.h>
@@ -68,7 +69,7 @@ void run_accelerometer_task(LedDriver &leds)
         }
         if (!lis3dh_init(ACCEL_I2C, lis3dh_odr_t::ODR_100HZ)) {
             if (!s_init_error_logged) {
-                printf("Accelerometer task: LIS3DH init failed, will keep retrying\n");
+                log(LogLevel::ERROR, "Accelerometer task: init failed, will keep retrying.");
                 s_init_error_logged = true;
             }
             s_init_retry_countdown = INIT_RETRY_FRAMES;
@@ -80,9 +81,14 @@ void run_accelerometer_task(LedDriver &leds)
     int16_t rx, ry, rz;
     if (!lis3dh_read_raw(ACCEL_I2C, &rx, &ry, &rz)) {
         if (!s_read_error_logged) {
-            printf("Accelerometer task: LIS3DH read failed, skipping frames\n");
+            log(LogLevel::ERROR, "Accelerometer task: read failed, re-initialising.");
             s_read_error_logged = true;
         }
+        // Reads that keep failing mean the device is gone or has reset, so go
+        // back through init (which re-checks WHO_AM_I) on the usual retry pace
+        // rather than hammering a dead bus every frame.
+        s_initialised          = false;
+        s_init_retry_countdown = INIT_RETRY_FRAMES;
         return;
     }
 
@@ -116,7 +122,7 @@ void exit_accelerometer_task(LedDriver &leds)
 {
     // Stop sampling — the driver handles the power-down register write.
     if (!lis3dh_power_down(ACCEL_I2C)) {
-        printf("Accelerometer task: LIS3DH power-down failed\n");
+        log(LogLevel::WARNING, "Accelerometer task: power-down failed.");
     }
 
     leds.off();

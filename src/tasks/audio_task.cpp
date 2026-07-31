@@ -1,6 +1,7 @@
 #include "audio_task.h"
 #include "drivers/microphone/microphone.h"
 #include "drivers/leds/leds.h"
+#include "drivers/logging/logging.h"
 #include "board.h"
 
 #include <stdint.h>
@@ -162,7 +163,9 @@ void run_audio_task(LedDriver &leds)
     // The amplifier biases the signal to mid-rail, so on a 12-bit ADC this
     // should land near 2048. Printed once per session as a sanity check.
     if (!s_bias_reported) {
-        printf("Audio task: DC bias %d (expected ~2048)\n", (int)dc_bias);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Audio task: DC bias %d (expected ~2048)", (int)dc_bias);
+        log(LogLevel::INFORMATION, msg);
         s_bias_reported = true;
     }
 

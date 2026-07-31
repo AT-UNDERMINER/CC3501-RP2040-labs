@@ -3,6 +3,7 @@
 #include "hardware/gpio.h"
 #include "board.h" // board-specific pin and bus configuration
 #include "drivers/leds/leds.h"
+#include "drivers/logging/logging.h"
 
 // task run/exit functions for each task
 #include "tasks/led_task.h"
@@ -62,7 +63,7 @@ int main()
         // One rising edge = one switch, even if the button is held down.
         if (s_button_pressed) {
             s_button_pressed = false;
-            printf("Button pressed\n"); // safe here in main(), not in the ISR
+            log(LogLevel::INFORMATION, "Button pressed"); // safe here in main(), not in the ISR
             task_exit[current_task](leds);
             current_task = (current_task + 1) % NUM_TASKS;
         }
