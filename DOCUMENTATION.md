@@ -39,7 +39,7 @@ demonstration tasks each time SW1 is pressed.
 | Microphone | ADC channel 0, **GPIO26** | 12-bit samples, ~mid-scale DC bias |
 
 Pin assignments live in [`board.h`](#boardh--board-pin-map). Standard I/O is
-routed to **UART** (USB stdio disabled) — see the build configuration.
+routed over **USB** (UART stdio disabled) — see the build configuration.
 
 ---
 
@@ -127,7 +127,7 @@ Key points of the firmware build:
   `RFFT_Q15_1024` constants for the 1024-point real FFT.
 - Generates the WS2812 PIO header at build time
   (`pico_generate_pio_header`).
-- Routes stdio to UART (`pico_enable_stdio_uart(labs 1)`), USB off.
+- Routes stdio over USB (`pico_enable_stdio_usb(labs 1)`), UART off.
 - Links the hardware libraries (`hardware_i2c`, `hardware_pio`,
   `hardware_adc`, …) and `CMSISDSP`.
 
@@ -262,8 +262,12 @@ float lis3dh_to_g(int16_t raw);                                      // raw → 
 - **WHO_AM_I check:** reads register `0x0F`, expects `0x33`; aborts init and
   returns `false` if the read fails or the ID does not match — never configures
   an unknown device.
-- **Checked transactions:** every register read/write verifies the I2C byte
-  count, so `lis3dh_init` / `lis3dh_set_odr` / `lis3dh_power_down` return
+- **Two transaction helpers:** `write_reg()` and
+  `read_registers(reg, data, length)` are the only places that touch
+  `i2c_*_blocking`. `read_registers` takes a length so the same code serves
+  single-register reads and the 3-axis burst.
+- **Checked transactions:** both helpers verify the I2C byte count and log the
+  failure, so `lis3dh_init` / `lis3dh_set_odr` / `lis3dh_power_down` return
   `false` on any bus failure and `lis3dh_read_raw` returns `false` with its
   outputs untouched.
 - **Multi-byte burst read:** the sub-address is OR-ed with `0x80`
@@ -342,8 +346,11 @@ serial, and shows tilt on the LED ring.
   on exit). If init fails (e.g. sensor missing), the task skips the frame and
   retries roughly every 250 ms (`INIT_RETRY_FRAMES` = 50 frames of the 5 ms
   loop) rather than every frame; the failure is printed once per session.
-- Failed reads skip the frame (LEDs keep their last state) and are likewise
-  logged once per session.
+- Failed reads skip the frame (LEDs keep their last state), are logged once per
+  session, and clear the init flag so the task re-runs `lis3dh_init` — including
+  the WHO_AM_I check — on the same retry pacing. A device that has been
+  unplugged or reset therefore recovers on its own, and a dead bus is probed
+  every 250 ms rather than every frame.
 - **Level** (|X| and |Y| < `LEVEL_THRESHOLD = 0.05 g`): all LEDs steady green.
 - **Tilted:** `bubble_led(gx, gy)` picks the LED that represents the lean.
   Most directions come from `atan2f(gx, gy)` mapped around the ring; leaning
@@ -427,6 +434,13 @@ No other changes are needed — `NUM_TASKS` is computed from the array size.
   `static bool` flag that `exit_*` resets, so re-entering re-initialises
   cleanly; the LED-only tasks (idle, led) need no init flag.
 - Drivers never reach into task logic and vice versa.
+- **Reporting:** events and faults go through the logging driver
+  (`log(LogLevel::…)`), which adds a severity and a boot-relative timestamp and
+  can be filtered at runtime with `setLogLevel()`. Plain `printf` is kept only
+  for continuous data output — the accelerometer's per-frame g-values, the
+  audio tuning line, and `LedDriver::print_status()`. Where a message needs a
+  measured value, it is formatted with `snprintf` first, since `log()` takes a
+  plain string.
 - Board-specific constants live only in `board.h`.
 - LED writes are staged; nothing reaches the hardware until `show()`.
 - The audio path is fixed point throughout; `idle_task` and
